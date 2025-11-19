@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-test
 Node 11: SMINA - In-silico Screening - In-silico screening
 Input: config.txt, cleaned PDB file, selected_compounds/ (individual SDF files)
 Output: Docking score (docking result files)
