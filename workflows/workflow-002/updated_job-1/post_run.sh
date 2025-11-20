@@ -9,8 +9,8 @@ set -e
 # Report processing
 # ----------------------------------------------------------------------------
 
-# Node 12: Generate report
-echo "=== Node 12: Generating report ==="
+# Node 14: Generate report
+echo "=== Node 14: Generating report ==="
 python report/node_14_reporting.py
 
 echo "✅ Post-run stage completed successfully!"
