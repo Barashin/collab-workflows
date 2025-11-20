@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-test
 """
 ドッキング結果レポート生成スクリプト
 Report/report.ipynbから変換
