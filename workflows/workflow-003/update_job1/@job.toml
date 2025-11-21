@@ -1,0 +1,5 @@
+[container]
+docker_image = "chiral.sakuracr.jp/smina:2025_10_17_v2"
+
+[scripts]
+
