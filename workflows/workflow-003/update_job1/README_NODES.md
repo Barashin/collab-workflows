@@ -89,11 +89,85 @@
 
 ## 実行方法
 
-### 一括実行（推奨）
+### Silva TUIツールでの実行（推奨）
 
-ワークフロー全体を3つのステージに分けて実行：
+Silvaは、各ノードの依存関係を自動的に解決し、適切な順序でジョブを実行します。
+
+**インストール方法**:
+
+Silvaがインストールされていない場合、以下のコマンドでインストールできます：
 
 ```bash
+# Linux/macOS用のインストールスクリプト
+curl -fsSL https://raw.githubusercontent.com/chiral-data/silva/main/install.sh | sh
+```
+
+インストール後、新しいターミナルを開くか、`source ~/.zshrc`（または`source ~/.bashrc`）を実行してPATHを更新してください。
+
+詳細は[Silva GitHubリポジトリ](https://github.com/chiral-data/silva)を参照してください。
+
+**事前準備**:
+
+Silvaを使用する前に、ワークフローのルートディレクトリを環境変数として設定します：
+
+```bash
+# ワークフローのルートディレクトリを設定
+export SILVA_WORKFLOW_HOME="/Users/kshinba/Desktop/Chiral/collab-workflows/workflows"
+
+# または、現在のワークフローディレクトリから相対パスで設定
+cd /Users/kshinba/Desktop/Chiral/collab-workflows/workflows/workflow-003/update_job1
+export SILVA_WORKFLOW_HOME="$(pwd)/.."
+```
+
+**実行方法**:
+
+```bash
+# 環境変数を設定（まだ設定していない場合）
+export SILVA_WORKFLOW_HOME="/Users/kshinba/Desktop/Chiral/collab-workflows/workflows"
+
+# Silva TUIを起動
+silva
+```
+
+SilvaのTUIが起動したら：
+1. **左/右矢印キー**（または`h`/`l`）でタブを切り替え
+2. **"Files"タブ**に移動してワークフロー一覧を表示
+3. **上下矢印キー**で`update_job1`を選択
+4. **Enterキー**でワークフローを実行
+5. **`d`キー**でDockerログを表示
+6. **`q`キー**で終了
+
+**Silvaがインストールされていない場合**:
+- `zsh: command not found: silva` というエラーが表示される場合は、上記のインストール手順を実行してください
+- インストールできない場合は、以下の「手動実行」セクションを参照してください
+
+Silvaの実行時：
+1. `.chiral/workflow.json`からグローバルパラメータ（`pdb_id`, `ligand_name`）を読み込み
+2. 各ノードの`.chiral/job.toml`から依存関係を解析
+3. 依存関係に基づいて実行順序を決定
+4. 各ノードの`run.sh`を順次実行
+5. 各ノードの`params.json`からパラメータ値を読み込み、環境変数として設定
+
+**パラメータの変更**:
+- SilvaのUIからパラメータを変更すると、対応する`params.json`ファイルが自動的に更新されます
+- グローバルパラメータ（`pdb_id`, `ligand_name`）は`.chiral/workflow.json`で定義
+- ノード固有のパラメータ（例: `docking/params.json`の`exhaustiveness`など）は各ノードの`params.json`で定義
+
+### 手動実行（一括実行）
+
+Silvaを使用しない場合、またはSilvaがインストールされていない場合、ワークフロー全体を3つのステージに分けて実行：
+
+```bash
+# ワークフローディレクトリに移動
+cd /Users/kshinba/Desktop/Chiral/collab-workflows/workflows/workflow-003/update_job1
+
+# 環境変数を設定
+export PARAM_PDB_ID="4OHU"
+export PARAM_LIGAND_NAME="2TK"
+export PARAM_EXHAUSTIVENESS="8"
+export PARAM_NUM_MODES="1"
+export PARAM_ENERGY_RANGE="3"
+
 # ステージ1: データ準備（タンパク質のダウンロードと準備、リガンドの抽出とバリアント生成）
 bash pre_run.sh
 
@@ -104,7 +178,9 @@ bash run.sh
 bash post_run.sh
 ```
 
-### 個別実行
+**注意**: 各ステージは前のステージが正常に完了した後に実行してください。
+
+### 個別ノード実行
 
 各ノードを個別に実行する場合：
 
@@ -129,7 +205,26 @@ python3 docking/node_08_docking_screening.py
 python3 report/node_09_reporting.py
 ```
 
-## 環境変数
+## パラメータ設定
+
+### Silva使用時
+
+Silvaを使用する場合、パラメータは以下のファイルで管理されます：
+
+1. **グローバルパラメータ** (`.chiral/workflow.json`):
+   - `pdb_id`: PDB ID（デフォルト: "4OHU"）
+   - `ligand_name`: リガンドの3文字コード（デフォルト: "2TK"）
+
+2. **ノード固有パラメータ** (`docking/params.json`):
+   - `exhaustiveness`: ドッキングの網羅性（デフォルト: 8）
+   - `num_modes`: ドッキングモード数（デフォルト: 1）
+   - `energy_range`: エネルギー範囲（デフォルト: 3）
+
+SilvaのUIからこれらのパラメータを変更すると、対応するJSONファイルが自動的に更新されます。
+
+### 手動実行時（環境変数）
+
+手動で実行する場合、以下の環境変数を設定してください：
 
 - `PARAM_PDB_ID`: PDB IDを指定（例: "4OHU"）
 - `PARAM_LIGAND_NAME`: リガンドの3文字コードを指定（例: "2TK"）
@@ -174,6 +269,30 @@ update_job1/
     ├── node_09_reporting.py
     └── output/             # レポート出力
 ```
+
+## Silvaでの実行フロー
+
+Silvaは以下の順序でノードを実行します：
+
+1. **protein** (Node 1) - 依存なし
+   - PDBファイルをダウンロード
+   - 出力: `*.pdb` → `preparation`に渡される
+
+2. **preparation** (Node 2-4) - `protein`に依存
+   - チェーン抽出、リガンド中心計算、構造修正
+   - 出力: `*.pdb`, `config.txt` → `ligand`と`docking`に渡される
+
+3. **ligand** (Node 5-6) - `preparation`に依存
+   - リガンド抽出とバリアント生成
+   - 出力: `*.sdf`, `ligand_library`, `variants.svg` → `docking`に渡される
+
+4. **docking** (Node 7-8) - `preparation`と`ligand`に依存
+   - レセプター準備とドッキングスクリーニング
+   - 出力: `*.pdbqt`, `docking_results` → `report`に渡される
+
+5. **report** (Node 9) - `docking`に依存
+   - レポート生成
+   - 出力: `results`
 
 ## 注意事項
 
