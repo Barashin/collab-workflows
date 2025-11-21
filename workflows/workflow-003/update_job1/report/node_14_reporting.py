@@ -7,6 +7,7 @@ Output: Score report (score report)
 """
 
 import glob
+import json
 import os
 import re
 import shutil
@@ -14,6 +15,22 @@ from pathlib import Path
 
 DEFAULT_PDB_ID = "5Y7J"
 DEFAULT_CHAIN_ID = "A"
+
+def load_global_params():
+    """Load parameters from global_params.json"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Try update_job1/global_params.json first, then workflow-003/global_params.json
+    global_params_file = os.path.join(script_dir, "..", "global_params.json")
+    if not os.path.exists(global_params_file):
+        global_params_file = os.path.join(script_dir, "..", "..", "global_params.json")
+    if os.path.exists(global_params_file):
+        try:
+            with open(global_params_file, "r") as f:
+                params = json.load(f)
+                return params.get("pdb_id", DEFAULT_PDB_ID)
+        except Exception as e:
+            print(f"⚠ Warning: Could not load global_params.json: {e}")
+    return DEFAULT_PDB_ID
 
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -127,16 +144,44 @@ def copy_top_compounds(results):
         print("Warning: No results available for copying.")
         return
     
-    # Get receptor file path
-    pdb_id = os.environ.get("PDB_ID", DEFAULT_PDB_ID)
+    # Load parameters from global_params.json or environment variables
+    global_pdb_id = load_global_params()
+    pdb_id = os.environ.get("PDB_ID") or os.environ.get("PARAM_PDB_ID") or global_pdb_id
     chain_id = os.environ.get("CHAIN_ID", DEFAULT_CHAIN_ID)
     
+    # Find receptor file with multiple fallback options
     receptor_file = None
+    
+    # Priority 1: Chain-specific cleaned PDB (e.g., 4OHU_chain_A_clean.pdb)
     if chain_id:
         receptor_file = os.path.join(PREPARATION_DIR, f"{pdb_id}_chain_{chain_id}_clean.pdb")
+        if os.path.exists(receptor_file):
+            print(f"Found receptor file: {os.path.basename(receptor_file)}")
     
+    # Priority 2: General cleaned PDB (e.g., 4OHU_clean.pdb)
     if not receptor_file or not os.path.exists(receptor_file):
         receptor_file = os.path.join(PREPARATION_DIR, f"{pdb_id}_clean.pdb")
+        if os.path.exists(receptor_file):
+            print(f"Found receptor file: {os.path.basename(receptor_file)}")
+    
+    # Priority 3: Search for any PDB file with _clean in the name
+    if not receptor_file or not os.path.exists(receptor_file):
+        clean_files = glob.glob(os.path.join(PREPARATION_DIR, f"{pdb_id}*_clean.pdb"))
+        if clean_files:
+            receptor_file = clean_files[0]
+            print(f"Found receptor file: {os.path.basename(receptor_file)}")
+    
+    # Priority 4: Search for any PDB file starting with pdb_id
+    if not receptor_file or not os.path.exists(receptor_file):
+        pdb_files = glob.glob(os.path.join(PREPARATION_DIR, f"{pdb_id}*.pdb"))
+        if pdb_files:
+            # Prefer files with "clean" in the name
+            clean_files = [f for f in pdb_files if "clean" in os.path.basename(f).lower()]
+            if clean_files:
+                receptor_file = clean_files[0]
+            else:
+                receptor_file = pdb_files[0]
+            print(f"Found receptor file: {os.path.basename(receptor_file)}")
     
     # Get top 3 compounds
     top_n = min(3, len(results))
@@ -152,7 +197,8 @@ def copy_top_compounds(results):
         shutil.copy(receptor_file, receptor_dst)
         print(f"✓ Copied receptor PDB: {receptor_dst.name}")
     else:
-        print(f"⚠ Warning: Receptor file not found: {receptor_file}")
+        print(f"⚠ Warning: Receptor file not found in {PREPARATION_DIR}")
+        print(f"   Searched for: {pdb_id}_chain_{chain_id}_clean.pdb, {pdb_id}_clean.pdb, {pdb_id}*_clean.pdb")
     
     copied_count = 0
     
