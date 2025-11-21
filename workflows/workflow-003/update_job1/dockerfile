@@ -1,7 +1,0 @@
-[container]
-docker_image = "python:3.11-slim"
-
-[scripts]
-pre = "install_deps.sh"
-run = "process_data.sh"
-post = "generate_report.sh"
