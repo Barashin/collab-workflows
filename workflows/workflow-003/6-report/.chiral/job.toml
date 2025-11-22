@@ -1,6 +1,0 @@
-depends_on = ["5-in-silico-screening"]
-inputs = ["docking_results"]
-outputs = ["results"]
-
-[container]
-docker_image = "python:3.11-slim"
