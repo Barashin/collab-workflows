@@ -40,7 +40,8 @@ ENV CONDA_DEFAULT_ENV=base
 ENV PATH="/opt/conda/bin:${PATH}"
 
 # conda環境の作成とパッケージのインストール
-RUN conda create -n in_silico python=3.13 -y
+# Python 3.12を使用（openbabelとの互換性のため）
+RUN conda create -n in_silico python=3.12 -y
 
 # 環境をアクティベート
 ENV CONDA_DEFAULT_ENV=in_silico
@@ -94,13 +95,13 @@ RUN /opt/conda/envs/in_silico/bin/pip install \
 RUN curl -Lo /usr/local/bin/smina https://sourceforge.net/projects/smina/files/smina.static/download
 RUN chmod +x /usr/local/bin/smina
 
-# Install mgltools
-RUN conda install -n in_silico -c bioconda -y \
-    mgltools
+# Install openbabel (required for ligand preparation)
+# Note: mgltools is not currently used in the workflow, so it's not installed
+RUN conda install -n in_silico -c conda-forge -y \
+    openbabel
 
 # Create a working directory
 WORKDIR /workspace
 
-CMD ["smina", "--version"]
 # デフォルト動作（継続実行）
 CMD ["tail", "-f", "/dev/null"]
