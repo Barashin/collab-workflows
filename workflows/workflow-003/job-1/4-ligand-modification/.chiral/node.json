@@ -1,0 +1,5 @@
+{
+  "name": "4 Ligand Modification",
+  "description": "Generate molecular variants from a base ligand, creates 2D depictions, and generates 3D structures.",
+  "params": {}
+}

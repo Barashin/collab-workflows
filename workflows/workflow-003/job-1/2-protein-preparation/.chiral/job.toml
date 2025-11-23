@@ -1,0 +1,6 @@
+depends_on = ["1-download-pdb"]
+inputs = ["*.pdb"]
+outputs = ["*.pdb"]
+
+[container]
+docker_image = "python:3.11-slim"

@@ -1,0 +1,5 @@
+{
+  "name": "5 In-Silico Screening",
+  "description": "Perform molecular docking screening using Smina to dock ligands against the prepared receptor.",
+  "params": {}
+}

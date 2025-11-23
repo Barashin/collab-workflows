@@ -1,0 +1,6 @@
+depends_on = ["3-ligand-extraction"]
+inputs = ["*.sdf"]
+outputs = ["ligand_library"]
+
+[container]
+docker_image = "python:3.11-slim"

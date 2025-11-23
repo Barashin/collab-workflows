@@ -1,0 +1,5 @@
+# No dependencies - this is the first job
+outputs = ["*.pdb"]
+
+[container]
+docker_image = "python:3.11-slim"

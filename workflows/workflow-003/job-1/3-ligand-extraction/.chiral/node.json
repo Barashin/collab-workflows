@@ -1,0 +1,5 @@
+{
+  "name": "3 Ligand Extraction",
+  "description": "Extract the ligand from a PDB file and save it as SDF format.",
+  "params": {}
+}

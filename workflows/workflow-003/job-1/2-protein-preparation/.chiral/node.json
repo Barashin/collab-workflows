@@ -1,0 +1,5 @@
+{
+  "name": "2 Protein Preparation",
+  "description": "Prepare protein structure by extracting chains and cleaning the structure.",
+  "params": {}
+}
