@@ -42,8 +42,10 @@ def load_global_params():
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Silva mounts inputs from depends_on nodes to the current directory
-# inputs = ["*.pdb"] means PDB files are mounted at ./outputs/*.pdb
-INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
+# inputs = ["*.pdb"] means PDB files are mounted at the working directory root
+# Try both root directory and outputs directory
+INPUT_DIR_ROOT = SCRIPT_DIR  # Root of working directory
+INPUT_DIR_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs")  # outputs subdirectory
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 
 def main():
@@ -57,7 +59,12 @@ def main():
     global_pdb_id, global_ligand_name = load_global_params()
     pdb_id = os.environ.get("PDB_ID") or os.environ.get("PARAM_PDB_ID") or global_pdb_id
     ligand_name = os.environ.get("LIGAND_NAME") or os.environ.get("PARAM_LIGAND_NAME") or global_ligand_name
-    input_pdb_file = os.path.join(INPUT_DIR, f"{pdb_id}.pdb")
+    
+    # Try to find PDB file in root directory first, then outputs directory
+    input_pdb_file = os.path.join(INPUT_DIR_ROOT, f"{pdb_id}.pdb")
+    if not os.path.exists(input_pdb_file):
+        input_pdb_file = os.path.join(INPUT_DIR_OUTPUTS, f"{pdb_id}.pdb")
+    
     output_pdb_file = os.path.join(OUTPUT_DIR, f"{pdb_id}_chain.pdb")
     output_ligand_sdf = os.path.join(OUTPUT_DIR, "real_ligand.sdf")
     

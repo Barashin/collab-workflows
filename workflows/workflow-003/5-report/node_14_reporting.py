@@ -36,35 +36,67 @@ def load_global_params():
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Silva mounts inputs from depends_on nodes to the current directory
 # inputs = ["*.pdb", "docking_results"] means:
-# - *.pdb files from 3-docking_preparation are mounted at ./outputs/*.pdb
-# - docking_results directory from 4-docking is mounted at ./outputs/docking_results
-INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "docking_results")
-# PDB files from 3-docking_preparation are mounted in the outputs directory
-PREPARATION_DIR = os.path.join(SCRIPT_DIR, "outputs")
+# - *.pdb files from 3-docking_preparation may be at root or ./outputs/*.pdb
+# - docking_results directory from 4-docking may be at root or ./outputs/docking_results
+# Try both root directory and outputs directory
+INPUT_DIR_ROOT = os.path.join(SCRIPT_DIR, "docking_results")
+INPUT_DIR_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs", "docking_results")
+PREPARATION_DIR_ROOT = SCRIPT_DIR  # Root of working directory
+PREPARATION_DIR_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs")  # outputs subdirectory
 # Silva expects outputs in the directory specified in outputs = ["results"]
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "results")
+# Output should be in "results" directory (not "outputs/results")
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, "results")
 RANKING_FILE = os.path.join(OUTPUT_DIR, "docking_ranking.txt")
 
 def main():
     """Main execution function"""
     print("=== Node 12: Generate report ===")
     
-    if not os.path.exists(INPUT_DIR):
-        print(f"❌ Error: {INPUT_DIR} directory not found.")
+    # Find docking_results directory in both root and outputs directories
+    INPUT_DIR = None
+    if os.path.exists(INPUT_DIR_ROOT):
+        INPUT_DIR = INPUT_DIR_ROOT
+        print(f"✓ Found docking_results in root directory")
+    elif os.path.exists(INPUT_DIR_OUTPUTS):
+        INPUT_DIR = INPUT_DIR_OUTPUTS
+        print(f"✓ Found docking_results in outputs directory")
+    
+    if not INPUT_DIR or not os.path.exists(INPUT_DIR):
+        print(f"❌ Error: docking_results directory not found.")
+        print(f"   Searched in: {INPUT_DIR_ROOT}")
+        print(f"   Searched in: {INPUT_DIR_OUTPUTS}")
         print("   Please run Node 11 (node_11_smina_screening.py) first.")
         exit(1)
+    
+    # Find preparation directory (for PDB files)
+    PREPARATION_DIR = None
+    if os.path.exists(PREPARATION_DIR_ROOT):
+        # Check if there are PDB files in root
+        root_pdb_files = glob.glob(os.path.join(PREPARATION_DIR_ROOT, "*.pdb"))
+        if root_pdb_files:
+            PREPARATION_DIR = PREPARATION_DIR_ROOT
+            print(f"✓ Found PDB files in root directory")
+    if not PREPARATION_DIR and os.path.exists(PREPARATION_DIR_OUTPUTS):
+        outputs_pdb_files = glob.glob(os.path.join(PREPARATION_DIR_OUTPUTS, "*.pdb"))
+        if outputs_pdb_files:
+            PREPARATION_DIR = PREPARATION_DIR_OUTPUTS
+            print(f"✓ Found PDB files in outputs directory")
+    
+    if not PREPARATION_DIR:
+        PREPARATION_DIR = PREPARATION_DIR_OUTPUTS  # Default to outputs
     
     # Create output directory
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
-    print(f"Input directory: {INPUT_DIR}")
+    print(f"Input directory (docking_results): {INPUT_DIR}")
+    print(f"Preparation directory (PDB files): {PREPARATION_DIR}")
     print(f"Output directory: {OUTPUT_DIR}")
     
     # Generate docking result ranking
-    results = generate_docking_ranking()
+    results = generate_docking_ranking(INPUT_DIR)
     
     # Copy top 3 compound files and generate complexes
-    copy_top_compounds(results)
+    copy_top_compounds(results, INPUT_DIR, PREPARATION_DIR)
     
     print("✅ Report generation complete.")
 
@@ -95,15 +127,19 @@ def parse_smina_log(log_file):
     return None  # mode1 data not found
 
 
-def generate_docking_ranking():
+def generate_docking_ranking(input_dir):
     """Generate docking result ranking"""
     print("\n--- Generate docking result ranking ---")
     
     # Get docking log files
-    log_files = glob.glob(os.path.join(INPUT_DIR, "*_log.txt"))
+    log_files = glob.glob(os.path.join(input_dir, "*_log.txt"))
     
     if not log_files:
-        print(f"❌ Error: No log files found in {INPUT_DIR}.")
+        print(f"❌ Error: No log files found in {input_dir}.")
+        print(f"   Searched pattern: {os.path.join(input_dir, '*_log.txt')}")
+        if os.path.exists(input_dir):
+            available_files = os.listdir(input_dir)
+            print(f"   Available files: {available_files[:20]}...")  # Show first 20 files
         exit(1)
     
     # Extract affinity from each log
@@ -142,7 +178,7 @@ def generate_docking_ranking():
     return results
 
 
-def copy_top_compounds(results):
+def copy_top_compounds(results, input_dir, preparation_dir):
     """Copy top 3 compound files and receptor PDB file separately"""
     print("\n--- Copy top 3 compound files and receptor ---")
     
@@ -160,26 +196,26 @@ def copy_top_compounds(results):
     
     # Priority 1: Chain-specific cleaned PDB (e.g., 4OHU_chain_A_clean.pdb)
     if chain_id:
-        receptor_file = os.path.join(PREPARATION_DIR, f"{pdb_id}_chain_{chain_id}_clean.pdb")
+        receptor_file = os.path.join(preparation_dir, f"{pdb_id}_chain_{chain_id}_clean.pdb")
         if os.path.exists(receptor_file):
             print(f"Found receptor file: {os.path.basename(receptor_file)}")
     
     # Priority 2: General cleaned PDB (e.g., 4OHU_clean.pdb)
     if not receptor_file or not os.path.exists(receptor_file):
-        receptor_file = os.path.join(PREPARATION_DIR, f"{pdb_id}_clean.pdb")
+        receptor_file = os.path.join(preparation_dir, f"{pdb_id}_clean.pdb")
         if os.path.exists(receptor_file):
             print(f"Found receptor file: {os.path.basename(receptor_file)}")
     
     # Priority 3: Search for any PDB file with _clean in the name
     if not receptor_file or not os.path.exists(receptor_file):
-        clean_files = glob.glob(os.path.join(PREPARATION_DIR, f"{pdb_id}*_clean.pdb"))
+        clean_files = glob.glob(os.path.join(preparation_dir, f"{pdb_id}*_clean.pdb"))
         if clean_files:
             receptor_file = clean_files[0]
             print(f"Found receptor file: {os.path.basename(receptor_file)}")
     
     # Priority 4: Search for any PDB file starting with pdb_id
     if not receptor_file or not os.path.exists(receptor_file):
-        pdb_files = glob.glob(os.path.join(PREPARATION_DIR, f"{pdb_id}*.pdb"))
+        pdb_files = glob.glob(os.path.join(preparation_dir, f"{pdb_id}*.pdb"))
         if pdb_files:
             # Prefer files with "clean" in the name
             clean_files = [f for f in pdb_files if "clean" in os.path.basename(f).lower()]
@@ -203,8 +239,11 @@ def copy_top_compounds(results):
         shutil.copy(receptor_file, receptor_dst)
         print(f"✓ Copied receptor PDB: {receptor_dst.name}")
     else:
-        print(f"⚠ Warning: Receptor file not found in {PREPARATION_DIR}")
+        print(f"⚠ Warning: Receptor file not found in {preparation_dir}")
         print(f"   Searched for: {pdb_id}_chain_{chain_id}_clean.pdb, {pdb_id}_clean.pdb, {pdb_id}*_clean.pdb")
+        if os.path.exists(preparation_dir):
+            available_files = [f for f in os.listdir(preparation_dir) if f.endswith('.pdb')]
+            print(f"   Available PDB files: {available_files[:10]}...")
     
     copied_count = 0
     
@@ -212,7 +251,7 @@ def copy_top_compounds(results):
         print(f"\nRank {rank}: {ligand_name} (Binding energy: {affinity:.2f} kcal/mol)")
         
         # Copy docked ligand SDF file
-        src_sdf = Path(INPUT_DIR) / f"{ligand_name}_docked.sdf"
+        src_sdf = Path(input_dir) / f"{ligand_name}_docked.sdf"
         if src_sdf.exists():
             dst_sdf = dst_dir / f"top{rank}_{ligand_name}_docked.sdf"
             shutil.copy(src_sdf, dst_sdf)

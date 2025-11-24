@@ -32,8 +32,10 @@ def load_global_params():
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Silva mounts inputs from depends_on nodes to the current directory
-# inputs = ["*.pdb"] means PDB files are mounted at ./outputs/*.pdb
-INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
+# inputs = ["*.pdb"] means PDB files are mounted at the working directory root
+# Try both root directory and outputs directory
+INPUT_DIR_ROOT = SCRIPT_DIR  # Root of working directory
+INPUT_DIR_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs")  # outputs subdirectory
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 
 def main():
@@ -49,19 +51,32 @@ def main():
     selected_chain_id = os.environ.get("CHAIN_ID", DEFAULT_CHAIN_ID)
     
     # Try to use chain-extracted PDB from node_08 first, fallback to original PDB
-    chain_pdb_file = os.path.join(INPUT_DIR, f"{pdb_id}_chain.pdb")
-    original_pdb_file = os.path.join(INPUT_DIR, f"{pdb_id}.pdb")
+    # Check both root and outputs directories
+    chain_pdb_file_root = os.path.join(INPUT_DIR_ROOT, f"{pdb_id}_chain.pdb")
+    chain_pdb_file_outputs = os.path.join(INPUT_DIR_OUTPUTS, f"{pdb_id}_chain.pdb")
+    original_pdb_file_root = os.path.join(INPUT_DIR_ROOT, f"{pdb_id}.pdb")
+    original_pdb_file_outputs = os.path.join(INPUT_DIR_OUTPUTS, f"{pdb_id}.pdb")
     
-    if os.path.exists(chain_pdb_file):
-        input_pdb_file = chain_pdb_file
-        print(f"Using chain-extracted PDB from node_08: {input_pdb_file}")
-    elif os.path.exists(original_pdb_file):
-        input_pdb_file = original_pdb_file
-        print(f"Using original PDB file: {input_pdb_file}")
-    else:
+    input_pdb_file = None
+    if os.path.exists(chain_pdb_file_root):
+        input_pdb_file = chain_pdb_file_root
+        print(f"Using chain-extracted PDB from node_08 (root): {input_pdb_file}")
+    elif os.path.exists(chain_pdb_file_outputs):
+        input_pdb_file = chain_pdb_file_outputs
+        print(f"Using chain-extracted PDB from node_08 (outputs): {input_pdb_file}")
+    elif os.path.exists(original_pdb_file_root):
+        input_pdb_file = original_pdb_file_root
+        print(f"Using original PDB file (root): {input_pdb_file}")
+    elif os.path.exists(original_pdb_file_outputs):
+        input_pdb_file = original_pdb_file_outputs
+        print(f"Using original PDB file (outputs): {input_pdb_file}")
+    
+    if not input_pdb_file:
         print(f"❌ Error: PDB file not found.")
-        print(f"   Tried: {chain_pdb_file}")
-        print(f"   Tried: {original_pdb_file}")
+        print(f"   Tried: {chain_pdb_file_root}")
+        print(f"   Tried: {chain_pdb_file_outputs}")
+        print(f"   Tried: {original_pdb_file_root}")
+        print(f"   Tried: {original_pdb_file_outputs}")
         print("   Please run Node 5 (node_05_download_pdb.py) and Node 8 (node_08_extract_chains.py) first.")
         exit(1)
     

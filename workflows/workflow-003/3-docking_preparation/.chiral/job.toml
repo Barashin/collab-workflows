@@ -6,4 +6,6 @@ outputs = ["*.pdb", "config.txt", "ligand_list.txt", "real_ligand.sdf"]
 docker_image = "chiral.sakuracr.jp/smina:2025_11_06"
 
 [scripts]
+pre_run = ""
+post_run = ""
 
