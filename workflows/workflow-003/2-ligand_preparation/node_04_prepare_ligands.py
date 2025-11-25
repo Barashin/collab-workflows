@@ -194,9 +194,10 @@ def add_hydrogens_obabel(sdf_file):
         # Store original file size for verification
         original_size = os.path.getsize(abs_sdf_file)
         
-        # obabel command: obabel $i -O $i -h
+        # obabel command: obabel $i -h -osdf -O $i
+        # Options must come after input file, and output format must be specified
         # Directly overwrite the same file
-        cmd = [obabel_cmd, abs_sdf_file, "-O", abs_sdf_file, "-h"]
+        cmd = [obabel_cmd, abs_sdf_file, "-h", "-osdf", "-O", abs_sdf_file]
         
         result = subprocess.run(
             cmd,
@@ -265,9 +266,10 @@ def assign_charges_obabel(sdf_file):
             print(f"    Error: Input file is empty: {abs_sdf_file}")
             return False
         
-        # obabel command: obabel "$i" -O "$i" --partialcharge gasteiger
+        # obabel command: obabel "$i" --partialcharge gasteiger -osdf -O "$i"
+        # Options must come after input file, and output format must be specified
         # Directly overwrite the same file
-        cmd = [obabel_cmd, abs_sdf_file, "-O", abs_sdf_file, "--partialcharge", "gasteiger"]
+        cmd = [obabel_cmd, abs_sdf_file, "--partialcharge", "gasteiger", "-osdf", "-O", abs_sdf_file]
         
         result = subprocess.run(
             cmd,
