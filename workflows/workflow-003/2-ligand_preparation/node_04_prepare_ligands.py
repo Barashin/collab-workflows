@@ -45,17 +45,22 @@ def main():
     print(f"Number of SDF files found: {len(sdf_files)}")
     
     # Check if obabel is available
-    if not check_obabel():
+    obabel_cmd = find_obabel()
+    if not obabel_cmd:
         print("❌ Error: Open Babel (obabel) is not available.")
         print("   Please install Open Babel: https://openbabel.org/wiki/Category:Installation")
         exit(1)
+    else:
+        print(f"✓ Found obabel at: {obabel_cmd}")
     
     # Check if obminimize is available
-    if not check_obminimize():
+    obminimize_cmd = find_obminimize()
+    if not obminimize_cmd:
         print("⚠ Warning: obminimize is not available. Energy minimization will be skipped.")
         print("   Please install Open Babel tools for energy minimization.")
         use_obminimize = False
     else:
+        print(f"✓ Found obminimize at: {obminimize_cmd}")
         use_obminimize = True
     
     # Process each SDF file
@@ -109,37 +114,71 @@ def main():
         print(f"   Failed: {failed_count}/{len(sdf_files)}")
 
 
+def find_obabel():
+    """Find obabel command in common locations"""
+    possible_paths = [
+        "obabel",  # In PATH
+        "/opt/conda/envs/in_silico/bin/obabel",  # Conda environment
+        "/usr/local/bin/obabel",
+        "/usr/bin/obabel",
+    ]
+    for path in possible_paths:
+        try:
+            result = subprocess.run(
+                [path, "-V"], 
+                capture_output=True, 
+                text=True, 
+                timeout=5
+            )
+            if result.returncode == 0:
+                return path
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+    return None
+
+
+def find_obminimize():
+    """Find obminimize command in common locations"""
+    possible_paths = [
+        "obminimize",  # In PATH
+        "/opt/conda/envs/in_silico/bin/obminimize",  # Conda environment
+        "/usr/local/bin/obminimize",
+        "/usr/bin/obminimize",
+    ]
+    for path in possible_paths:
+        try:
+            result = subprocess.run(
+                [path, "-h"], 
+                capture_output=True, 
+                text=True, 
+                timeout=5
+            )
+            if result.returncode == 0:
+                return path
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+    return None
+
+
 def check_obabel():
     """Check if obabel command is available"""
-    try:
-        result = subprocess.run(
-            ["obabel", "-V"], 
-            capture_output=True, 
-            text=True, 
-            timeout=5
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
+    return find_obabel() is not None
 
 
 def check_obminimize():
     """Check if obminimize command is available"""
-    try:
-        result = subprocess.run(
-            ["obminimize", "-h"], 
-            capture_output=True, 
-            text=True, 
-            timeout=5
-        )
-        return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
+    return find_obminimize() is not None
 
 
 def add_hydrogens_obabel(sdf_file):
     """Add hydrogens to SDF file using obabel"""
     try:
+        # Find obabel command
+        obabel_cmd = find_obabel()
+        if not obabel_cmd:
+            print(f"    Error: obabel command not found")
+            return False
+        
         # Create temporary file
         temp_file = sdf_file + ".tmp"
         
@@ -147,8 +186,17 @@ def add_hydrogens_obabel(sdf_file):
         abs_sdf_file = os.path.abspath(sdf_file)
         abs_temp_file = os.path.abspath(temp_file)
         
+        # Check if input file exists and is readable
+        if not os.path.exists(abs_sdf_file):
+            print(f"    Error: Input file does not exist: {abs_sdf_file}")
+            return False
+        
+        if os.path.getsize(abs_sdf_file) == 0:
+            print(f"    Error: Input file is empty: {abs_sdf_file}")
+            return False
+        
         # obabel requires explicit output format specification
-        cmd = ["obabel", abs_sdf_file, "-h", "-osdf", "-O", abs_temp_file]
+        cmd = [obabel_cmd, abs_sdf_file, "-h", "-osdf", "-O", abs_temp_file]
         
         result = subprocess.run(
             cmd,
@@ -158,20 +206,37 @@ def add_hydrogens_obabel(sdf_file):
         )
         
         # obabel outputs "N molecules converted" to stderr even on success
+        # Check stderr for conversion message
+        if result.stderr:
+            stderr_lower = result.stderr.lower()
+            if "error" in stderr_lower or "cannot" in stderr_lower or "failed" in stderr_lower:
+                print(f"    obabel error: {result.stderr[:300]}")
+                if os.path.exists(abs_temp_file):
+                    os.remove(abs_temp_file)
+                return False
+        
+        # Check if output file was created and is not empty
         if result.returncode == 0:
             if os.path.exists(abs_temp_file) and os.path.getsize(abs_temp_file) > 0:
                 # Replace original file
                 os.replace(abs_temp_file, abs_sdf_file)
+                if result.stderr:
+                    # Print success message from stderr (e.g., "1 molecule converted")
+                    print(f"    {result.stderr.strip()}")
                 return True
             else:
                 print(f"    Error: Output file was not created or is empty")
+                if result.stderr:
+                    print(f"    obabel stderr: {result.stderr[:300]}")
+                if result.stdout:
+                    print(f"    obabel stdout: {result.stdout[:300]}")
                 return False
         else:
             # Print error details for debugging
             if result.stderr:
-                print(f"    obabel stderr: {result.stderr[:200]}")
+                print(f"    obabel stderr: {result.stderr[:300]}")
             if result.stdout:
-                print(f"    obabel stdout: {result.stdout[:200]}")
+                print(f"    obabel stdout: {result.stdout[:300]}")
             if os.path.exists(abs_temp_file):
                 os.remove(abs_temp_file)
             return False
@@ -180,12 +245,20 @@ def add_hydrogens_obabel(sdf_file):
         return False
     except Exception as e:
         print(f"    Error: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
 def assign_charges_obabel(sdf_file):
     """Assign Gasteiger partial charges using obabel"""
     try:
+        # Find obabel command
+        obabel_cmd = find_obabel()
+        if not obabel_cmd:
+            print(f"    Error: obabel command not found")
+            return False
+        
         # Create temporary file
         temp_file = sdf_file + ".tmp"
         
@@ -194,13 +267,22 @@ def assign_charges_obabel(sdf_file):
         abs_temp_file = os.path.abspath(temp_file)
         
         result = subprocess.run(
-            ["obabel", abs_sdf_file, "--partialcharge", "gasteiger", "-osdf", "-O", abs_temp_file],
+            [obabel_cmd, abs_sdf_file, "--partialcharge", "gasteiger", "-osdf", "-O", abs_temp_file],
             capture_output=True,
             text=True,
             timeout=120
         )
         
         # obabel outputs "N molecules converted" to stderr even on success
+        # Check stderr for errors
+        if result.stderr:
+            stderr_lower = result.stderr.lower()
+            if "error" in stderr_lower or "cannot" in stderr_lower or "failed" in stderr_lower:
+                print(f"    obabel error: {result.stderr[:300]}")
+                if os.path.exists(abs_temp_file):
+                    os.remove(abs_temp_file)
+                return False
+        
         if result.returncode == 0:
             if os.path.exists(abs_temp_file) and os.path.getsize(abs_temp_file) > 0:
                 # Replace original file
@@ -208,18 +290,22 @@ def assign_charges_obabel(sdf_file):
                 return True
             else:
                 print(f"    Error: Output file was not created or is empty")
+                if result.stderr:
+                    print(f"    obabel stderr: {result.stderr[:300]}")
                 return False
         else:
             if os.path.exists(abs_temp_file):
                 os.remove(abs_temp_file)
             if result.stderr:
-                print(f"    obabel stderr: {result.stderr[:200]}")
+                print(f"    obabel stderr: {result.stderr[:300]}")
             return False
     except subprocess.TimeoutExpired:
         print(f"    Timeout while assigning charges")
         return False
     except Exception as e:
         print(f"    Error: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -326,6 +412,12 @@ def generate_3d_structure(sdf_file):
 def minimize_energy(sdf_file):
     """Minimize energy using obminimize"""
     try:
+        # Find obminimize command
+        obminimize_cmd = find_obminimize()
+        if not obminimize_cmd:
+            print(f"    Error: obminimize command not found")
+            return False
+        
         # Create temporary file
         temp_file = sdf_file + ".tmp"
         
@@ -335,7 +427,7 @@ def minimize_energy(sdf_file):
         
         with open(abs_temp_file, "w") as outfile:
             result = subprocess.run(
-                ["obminimize", "-ff", "MMFF94", "-n", "1000", abs_sdf_file],
+                [obminimize_cmd, "-ff", "MMFF94", "-n", "1000", abs_sdf_file],
                 stdout=outfile,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -350,13 +442,15 @@ def minimize_energy(sdf_file):
             if os.path.exists(abs_temp_file):
                 os.remove(abs_temp_file)
             if result.stderr:
-                print(f"    obminimize stderr: {result.stderr[:200]}")
+                print(f"    obminimize stderr: {result.stderr[:300]}")
             return False
     except subprocess.TimeoutExpired:
         print(f"    Timeout during energy minimization (skipping)")
         return False
     except Exception as e:
         print(f"    Error during energy minimization: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
