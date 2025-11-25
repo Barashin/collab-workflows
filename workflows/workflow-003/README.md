@@ -255,10 +255,10 @@ Parameters can also be set via environment variables (takes precedence over `glo
 | Ligand Preparation | ~5-10 min (depends on number of ligands) |
 | Docking Preparation | ~2-3 min |
 | Docking (per ligand) | ~2-5 min |
-| Full Library (20-30 ligands) | ~1-2 hrs |
+| Full Library (20-30 ligands) | ~10 min |
 | Report Generation | <1 min |
 
-**Total Runtime:** ~1.5-2.5 hours for a typical screening of 20-30 ligands
+**Total Runtime:** ~20 min for a typical screening of 20-30 ligands
 
 ---
 
@@ -292,19 +292,20 @@ workflow-003/
 │           ├── {ligand_name}_docked.sdf
 │           └── {ligand_name}_log.txt
 └── 5-report/
-    └── results/
+    └── outputs/
         ├── docking_ranking.txt
-        ├── receptor_{pdb_id}_chain_{chain_id}_clean.pdb
-        ├── top1_{ligand_name}_docked.sdf
-        ├── top2_{ligand_name}_docked.sdf
-        └── top3_{ligand_name}_docked.sdf
+        └── results/
+            ├── receptor_{pdb_id}_chain_{chain_id}_clean.pdb
+            ├── top1_{ligand_name}_docked.sdf
+            ├── top2_{ligand_name}_docked.sdf
+            └── top3_{ligand_name}_docked.sdf
 ```
 
 ---
 
 ## Docking Result Ranking
 
-The final report (`results/docking_ranking.txt`) contains a ranked list of ligands sorted by binding energy (stronger binding = more negative energy):
+The final report (`outputs/results/docking_ranking.txt`) contains a ranked list of ligands sorted by binding energy (stronger binding = more negative energy):
 
 ```
 Docking Result Ranking (sorted by binding strength)
@@ -349,7 +350,7 @@ The workflow is designed to run in **Silva**, which automatically:
 1. Configure `global_params.json` with your target PDB ID and ligand name
 2. Run the workflow in Silva TUI
 3. Monitor execution progress
-4. Review results in `5-report/results/`
+4. Review results in `5-report/outputs/results/`
 
 ### Manual Execution (Testing)
 

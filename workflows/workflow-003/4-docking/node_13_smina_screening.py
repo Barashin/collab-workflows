@@ -317,6 +317,18 @@ def main():
             print(f"✗ Unexpected error occurred during docking for {base_name}: {e}")
             failed_count += 1
     
+    # Clean up any stray files in outputs/ directory (they should only be in outputs/docking_results/)
+    if os.path.exists(OUTPUT_DIR):
+        for item in os.listdir(OUTPUT_DIR):
+            item_path = os.path.join(OUTPUT_DIR, item)
+            # Skip docking_results directory
+            if item == "docking_results":
+                continue
+            # Remove any .sdf or .txt files directly in outputs/
+            if os.path.isfile(item_path) and (item.endswith('.sdf') or item.endswith('_log.txt') or item.endswith('.txt')):
+                print(f"⚠ Removing stray file from outputs/: {item}")
+                os.remove(item_path)
+    
     print(f"\n✅ Docking screening complete.")
     print(f"   Successful: {successful_count}/{len(ligand_files)}")
     if failed_count > 0:

@@ -30,6 +30,13 @@ OUTPUT_DIR="${SCRIPT_DIR}/outputs"
 mkdir -p "${INPUT_DIR}"
 mkdir -p "${OUTPUT_DIR}"
 
+# Clean up any stray files in outputs/ directory (but keep docking_results/ if it exists)
+# Remove any .sdf or .txt files directly in outputs/ (they should be in outputs/docking_results/)
+if [ -d "${OUTPUT_DIR}" ]; then
+    find "${OUTPUT_DIR}" -maxdepth 1 -type f \( -name "*.sdf" -o -name "*_log.txt" -o -name "*.txt" \) -delete 2>/dev/null || true
+    echo "Cleaned up stray files in ${OUTPUT_DIR}"
+fi
+
 # ============================================================================
 # Move files from Silva mounts to input/ directory
 # ============================================================================
