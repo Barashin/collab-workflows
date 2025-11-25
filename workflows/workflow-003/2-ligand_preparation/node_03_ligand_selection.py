@@ -13,8 +13,13 @@ import shutil
 
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "constructed_library")
+# Input from other nodes should be in input/ directory
+# Output from this node should be in outputs/ directory
+INPUT_DIR = os.path.join(SCRIPT_DIR, "input", "constructed_library")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
+# Fallback to outputs for backward compatibility
+if not os.path.exists(INPUT_DIR):
+    INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "constructed_library")
 
 # Default number of ligands to select randomly
 DEFAULT_NUM_LIGANDS = 29
@@ -70,7 +75,28 @@ def main():
         try:
             # Get the filename
             filename = os.path.basename(ligand_file)
-            output_file = os.path.join(OUTPUT_DIR, filename)
+            base_name, ext = os.path.splitext(filename)
+
+            if ext.lower() != ".sdf":
+                print(f"Warning: Skipping non-SDF file {filename}")
+                continue
+
+            # Remove any additional extension fragments such as '.cdx'
+            sanitized_base = base_name.split(".")[0] if "." in base_name else base_name
+
+            # Remove leading non-alphanumeric characters (e.g., '--_-CAMPHOR')
+            sanitized_base = sanitized_base.lstrip("-_+.")
+
+            if not sanitized_base:
+                sanitized_base = base_name.replace(".", "_") or "ligand"
+
+            output_file = os.path.join(OUTPUT_DIR, f"{sanitized_base}.sdf")
+
+            # Avoid overwriting files with same sanitized name
+            counter = 1
+            while os.path.exists(output_file):
+                output_file = os.path.join(OUTPUT_DIR, f"{sanitized_base}_{counter}.sdf")
+                counter += 1
             
             # Copy the file
             shutil.copy2(ligand_file, output_file)

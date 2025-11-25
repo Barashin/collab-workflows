@@ -34,71 +34,98 @@ def load_global_params():
 
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Silva mounts inputs from depends_on nodes to the current directory
-# inputs = ["*.pdb", "docking_results"] means:
-# - *.pdb files from 3-docking_preparation may be at root or ./outputs/*.pdb
-# - docking_results directory from 4-docking may be at root or ./outputs/docking_results
-# Try both root directory and outputs directory
-INPUT_DIR_ROOT = os.path.join(SCRIPT_DIR, "docking_results")
-INPUT_DIR_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs", "docking_results")
-PREPARATION_DIR_ROOT = SCRIPT_DIR  # Root of working directory
-PREPARATION_DIR_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs")  # outputs subdirectory
-# Silva expects outputs in the directory specified in outputs = ["results"]
-# Output should be in "results" directory (not "outputs/results")
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, "results")
-RANKING_FILE = os.path.join(OUTPUT_DIR, "docking_ranking.txt")
+# Input from other nodes should be in input/ directory
+# Output from this node should be in outputs/results/ directory (as specified in job.toml)
+INPUT_DIR = os.path.join(SCRIPT_DIR, "input")
+# Base output directory
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
+# Actual results directory
+RESULTS_DIR = os.path.join(OUTPUT_DIR, "results")
+
+# docking_results from 4-docking should be in input/docking_results
+DOCKING_RESULTS_DIR = os.path.join(INPUT_DIR, "docking_results")
+# PDB files from 3-docking_preparation should be in input/
+PREPARATION_DIR = INPUT_DIR
+# Output should be in "outputs/results" directory
+RANKING_FILE = os.path.join(RESULTS_DIR, "docking_ranking.txt")
 
 def main():
     """Main execution function"""
+    global OUTPUT_DIR, RESULTS_DIR, RANKING_FILE
+    
     print("=== Node 12: Generate report ===")
     
-    # Find docking_results directory in both root and outputs directories
-    INPUT_DIR = None
-    if os.path.exists(INPUT_DIR_ROOT):
-        INPUT_DIR = INPUT_DIR_ROOT
-        print(f"✓ Found docking_results in root directory")
-    elif os.path.exists(INPUT_DIR_OUTPUTS):
-        INPUT_DIR = INPUT_DIR_OUTPUTS
-        print(f"✓ Found docking_results in outputs directory")
+    # Reset directories to ensure correctness
+    OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
+    RESULTS_DIR = os.path.join(OUTPUT_DIR, "results")
+    RANKING_FILE = os.path.join(RESULTS_DIR, "docking_ranking.txt")
     
-    if not INPUT_DIR or not os.path.exists(INPUT_DIR):
+    # Find docking_results directory in input/ directory (copied by run.sh)
+    if not os.path.exists(DOCKING_RESULTS_DIR):
         print(f"❌ Error: docking_results directory not found.")
-        print(f"   Searched in: {INPUT_DIR_ROOT}")
-        print(f"   Searched in: {INPUT_DIR_OUTPUTS}")
-        print("   Please run Node 11 (node_11_smina_screening.py) first.")
+        print(f"   Searched in: {DOCKING_RESULTS_DIR}")
+        if os.path.exists(INPUT_DIR):
+            dirs = [d for d in os.listdir(INPUT_DIR) if os.path.isdir(os.path.join(INPUT_DIR, d))]
+            if dirs:
+                print(f"   Available directories in input: {dirs}")
+        print("   Please ensure 4-docking has completed and run.sh has copied files to input/.")
         exit(1)
     
-    # Find preparation directory (for PDB files)
-    PREPARATION_DIR = None
-    if os.path.exists(PREPARATION_DIR_ROOT):
-        # Check if there are PDB files in root
-        root_pdb_files = glob.glob(os.path.join(PREPARATION_DIR_ROOT, "*.pdb"))
-        if root_pdb_files:
-            PREPARATION_DIR = PREPARATION_DIR_ROOT
-            print(f"✓ Found PDB files in root directory")
-    if not PREPARATION_DIR and os.path.exists(PREPARATION_DIR_OUTPUTS):
-        outputs_pdb_files = glob.glob(os.path.join(PREPARATION_DIR_OUTPUTS, "*.pdb"))
-        if outputs_pdb_files:
-            PREPARATION_DIR = PREPARATION_DIR_OUTPUTS
-            print(f"✓ Found PDB files in outputs directory")
+    print(f"✓ Found docking_results in input: {DOCKING_RESULTS_DIR}")
     
-    if not PREPARATION_DIR:
-        PREPARATION_DIR = PREPARATION_DIR_OUTPUTS  # Default to outputs
+    # Find PDB files in input/ directory (copied by run.sh)
+    # PREPARATION_DIR is already set to INPUT_DIR at module level
+    if not os.path.exists(PREPARATION_DIR):
+        print(f"⚠ Warning: PDB files directory not found in input/.")
+    
+    # Ensure OUTPUT_DIR is not nested (double-check and fix if needed)
+    OUTPUT_DIR = os.path.abspath(OUTPUT_DIR)
+    RANKING_FILE = os.path.join(OUTPUT_DIR, "docking_ranking.txt")
+    
+    # Remove nested outputs directory if it exists
+    nested_outputs = os.path.join(OUTPUT_DIR, "outputs")
+    if os.path.exists(nested_outputs) and os.path.isdir(nested_outputs):
+        print(f"⚠ Warning: Found nested outputs directory: {nested_outputs}")
+        print(f"   Removing it to avoid confusion...")
+        shutil.rmtree(nested_outputs)
     
     # Create output directory
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
-    print(f"Input directory (docking_results): {INPUT_DIR}")
+    # Verify that OUTPUT_DIR was created
+    if not os.path.exists(OUTPUT_DIR):
+        print(f"❌ Error: Failed to create output directory: {OUTPUT_DIR}")
+        exit(1)
+    
+    print(f"Input directory (docking_results): {DOCKING_RESULTS_DIR}")
     print(f"Preparation directory (PDB files): {PREPARATION_DIR}")
     print(f"Output directory: {OUTPUT_DIR}")
+    print(f"✓ Output directory created: {OUTPUT_DIR}")
     
     # Generate docking result ranking
-    results = generate_docking_ranking(INPUT_DIR)
+    try:
+        results = generate_docking_ranking(DOCKING_RESULTS_DIR)
+    except Exception as e:
+        print(f"❌ Error in generate_docking_ranking: {e}")
+        import traceback
+        traceback.print_exc()
+        exit(1)
     
     # Copy top 3 compound files and generate complexes
-    copy_top_compounds(results, INPUT_DIR, PREPARATION_DIR)
+    try:
+        copy_top_compounds(results, DOCKING_RESULTS_DIR, PREPARATION_DIR)
+    except Exception as e:
+        print(f"❌ Error in copy_top_compounds: {e}")
+        import traceback
+        traceback.print_exc()
+        exit(1)
     
-    print("✅ Report generation complete.")
+    # Verify that results directory still exists and has files
+    if os.path.exists(RESULTS_DIR):
+        result_files = os.listdir(RESULTS_DIR)
+        print(f"✅ Report generation complete. Results directory contains {len(result_files)} file(s).")
+    else:
+        print(f"⚠ Warning: Results directory was removed or does not exist: {RESULTS_DIR}")
 
 
 def parse_smina_log(log_file):
@@ -135,12 +162,13 @@ def generate_docking_ranking(input_dir):
     log_files = glob.glob(os.path.join(input_dir, "*_log.txt"))
     
     if not log_files:
-        print(f"❌ Error: No log files found in {input_dir}.")
+        error_msg = f"No log files found in {input_dir}."
+        print(f"❌ Error: {error_msg}")
         print(f"   Searched pattern: {os.path.join(input_dir, '*_log.txt')}")
         if os.path.exists(input_dir):
             available_files = os.listdir(input_dir)
             print(f"   Available files: {available_files[:20]}...")  # Show first 20 files
-        exit(1)
+        raise FileNotFoundError(error_msg)
     
     # Extract affinity from each log
     results = []
@@ -151,8 +179,9 @@ def generate_docking_ranking(input_dir):
             results.append((compound_name, affinity))
     
     if not results:
-        print("❌ Error: No valid docking results found.")
-        exit(1)
+        error_msg = "No valid docking results found."
+        print(f"❌ Error: {error_msg}")
+        raise ValueError(error_msg)
     
     # Sort by affinity (binding energy) in ascending order (lower = stronger binding)
     results.sort(key=lambda x: x[1])
@@ -230,7 +259,7 @@ def copy_top_compounds(results, input_dir, preparation_dir):
     top_compounds = results[:top_n]
     
     # Destination directory
-    dst_dir = Path(OUTPUT_DIR)
+    dst_dir = Path(RESULTS_DIR)
     dst_dir.mkdir(exist_ok=True)
     
     # Copy receptor PDB file (used for docking)
@@ -260,7 +289,7 @@ def copy_top_compounds(results, input_dir, preparation_dir):
         else:
             print(f"  ⚠ Warning: Docked SDF file not found: {src_sdf.name}")
     
-    print(f"\n✅ Copied receptor PDB and {copied_count} top {top_n} ligand file(s) to {OUTPUT_DIR}/")
+    print(f"\n✅ Copied receptor PDB and {copied_count} top {top_n} ligand file(s) to {RESULTS_DIR}/")
 
 
 

@@ -12,58 +12,53 @@ from rdkit import Chem
 
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Silva mounts inputs from depends_on nodes to the current directory
-# inputs = ["*.pdb", "real_ligand.sdf"] means:
-# - *.pdb files from 1-protein_preparation may be mounted at root or ./outputs/*.pdb
-# - real_ligand.sdf from 3-docking_preparation may be mounted at root or ./outputs/real_ligand.sdf
-INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
-OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
-# real_ligand.sdf may be mounted at multiple locations
-REAL_LIGAND_ROOT = os.path.join(SCRIPT_DIR, "real_ligand.sdf")
-REAL_LIGAND_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs", "real_ligand.sdf")
+# Input from other nodes should be in input/ directory
+# Output from this node should be in outputs/ directory
+INPUT_DIR = os.path.join(SCRIPT_DIR, "input")
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
+SELECTED_COMPOUNDS_DIR = os.path.join(OUTPUT_DIR, "selected_compounds")
+# real_ligand.sdf from 3-docking_preparation should be in input/ directory (copied by run.sh)
+REAL_LIGAND_INPUT = os.path.join(INPUT_DIR, "real_ligand.sdf")
 
 def main():
     """Main execution function"""
     print("=== Node 6: Real ligand addition ===")
     
     # Ensure selected_compounds directory exists
-    os.makedirs(INPUT_DIR, exist_ok=True)
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(SELECTED_COMPOUNDS_DIR, exist_ok=True)
     
-    # Find real_ligand.sdf from 3-docking_preparation (mounted by Silva)
-    # Check both root and outputs directories
-    real_ligand_source = None
-    if os.path.exists(REAL_LIGAND_ROOT):
-        real_ligand_source = REAL_LIGAND_ROOT
-        print(f"✓ Found real_ligand.sdf at root: {REAL_LIGAND_ROOT}")
-    elif os.path.exists(REAL_LIGAND_OUTPUTS):
-        real_ligand_source = REAL_LIGAND_OUTPUTS
-        print(f"✓ Found real_ligand.sdf at outputs: {REAL_LIGAND_OUTPUTS}")
+    # Find real_ligand.sdf from 3-docking_preparation in input/ directory (copied by run.sh)
+    real_ligand_source = REAL_LIGAND_INPUT
     
-    if not real_ligand_source:
+    if not os.path.exists(real_ligand_source):
         print(f"❌ Error: real_ligand.sdf not found.")
-        print(f"   Searched in: {REAL_LIGAND_ROOT}")
-        print(f"   Searched in: {REAL_LIGAND_OUTPUTS}")
-        print("   Please ensure 3-docking_preparation has completed and real_ligand.sdf is available.")
+        print(f"   Searched in: {REAL_LIGAND_INPUT}")
+        if os.path.exists(INPUT_DIR):
+            input_files = [f for f in os.listdir(INPUT_DIR) if f.endswith('.sdf')]
+            if input_files:
+                print(f"   Available SDF files in input: {input_files}")
+        print("   Please ensure 3-docking_preparation has completed and run.sh has copied files to input/.")
         exit(1)
     
-    # Find all prepared ligand SDF files
-    sdf_pattern = os.path.join(INPUT_DIR, "*.sdf")
+    print(f"✓ Found real_ligand.sdf in input directory: {REAL_LIGAND_INPUT}")
+    
+    # Find all prepared ligand SDF files in selected_compounds
+    sdf_pattern = os.path.join(SELECTED_COMPOUNDS_DIR, "*.sdf")
     prepared_ligand_files = sorted(glob.glob(sdf_pattern))
     
     # Exclude real_ligand if it's already in the directory
     prepared_ligand_files = [f for f in prepared_ligand_files 
                             if not os.path.basename(f).startswith("real_ligand")]
     
-    print(f"Found {len(prepared_ligand_files)} prepared ligand(s) in {INPUT_DIR}")
+    print(f"Found {len(prepared_ligand_files)} prepared ligand(s) in {SELECTED_COMPOUNDS_DIR}")
     print(f"Adding real ligand from: {os.path.basename(real_ligand_source)}")
     
     # Copy real ligand to selected_compounds directory
-    real_ligand_dest = os.path.join(OUTPUT_DIR, "real_ligand.sdf")
+    real_ligand_dest = os.path.join(SELECTED_COMPOUNDS_DIR, "real_ligand.sdf")
     
     # Check if real_ligand.sdf already exists in destination
     if os.path.exists(real_ligand_dest):
-        print(f"⚠ real_ligand.sdf already exists in {OUTPUT_DIR}, overwriting...")
+        print(f"⚠ real_ligand.sdf already exists in {SELECTED_COMPOUNDS_DIR}, overwriting...")
     
     try:
         import shutil

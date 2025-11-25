@@ -15,6 +15,9 @@ FILE_URL = (
 )
 # Get script directory and set output directory relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Input from other nodes should be in input/ directory
+# Output from this node should be in outputs/ directory
+INPUT_DIR = os.path.join(SCRIPT_DIR, "input")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "ligands.zip")
 

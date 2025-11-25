@@ -44,14 +44,14 @@ WATER_NAMES = {"HOH", "WAT", "H2O"}
 
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Silva mounts inputs from depends_on nodes to the current directory
-# inputs = ["*.pdb"] means:
-# - *.pdb files from 1-protein_preparation are mounted at the working directory root
-# Try both root directory and outputs directory
-INPUT_PDB_DIR_ROOT = SCRIPT_DIR  # Root of working directory
-INPUT_PDB_DIR_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs")  # outputs subdirectory
-INPUT_LIGAND_DIR = os.path.join(SCRIPT_DIR, "outputs")  # For optional Ligands_select.sdf and ligand.csv (not required)
+# Input from other nodes should be in input/ directory
+# Output from this node should be in outputs/ directory
+INPUT_DIR = os.path.join(SCRIPT_DIR, "input")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
+# PDB file from 1-protein_preparation should be in input/ directory
+INPUT_PDB_DIR = INPUT_DIR
+# For optional Ligands_select.sdf and ligand.csv (not required)
+INPUT_LIGAND_DIR = INPUT_DIR
 OUTPUT_LIGAND_LIST = os.path.join(OUTPUT_DIR, "ligand_list.txt")
 
 def main():
@@ -65,10 +65,8 @@ def main():
     global_pdb_id, global_ligand_name = load_global_params()
     pdb_id = os.environ.get("PDB_ID") or os.environ.get("PARAM_PDB_ID") or global_pdb_id
     
-    # Try to find PDB file in root directory first, then outputs directory
-    input_pdb_file = os.path.join(INPUT_PDB_DIR_ROOT, f"{pdb_id}.pdb")
-    if not os.path.exists(input_pdb_file):
-        input_pdb_file = os.path.join(INPUT_PDB_DIR_OUTPUTS, f"{pdb_id}.pdb")
+    # Find PDB file in input/ directory (copied from other nodes by run.sh)
+    input_pdb_file = os.path.join(INPUT_PDB_DIR, f"{pdb_id}.pdb")
     
     input_sdf_file = os.path.join(INPUT_LIGAND_DIR, "Ligands_select.sdf")
     input_csv_file = os.path.join(INPUT_LIGAND_DIR, "ligand.csv")
@@ -76,15 +74,12 @@ def main():
     # Check input files
     if not os.path.exists(input_pdb_file):
         print(f"❌ Error: {pdb_id}.pdb not found.")
-        print(f"   Searched in: {INPUT_PDB_DIR_ROOT}")
-        if os.path.exists(INPUT_PDB_DIR_ROOT):
-            root_files = [f for f in os.listdir(INPUT_PDB_DIR_ROOT) if f.endswith('.pdb')]
-            print(f"   Available PDB files in root: {root_files}")
-        print(f"   Searched in: {INPUT_PDB_DIR_OUTPUTS}")
-        if os.path.exists(INPUT_PDB_DIR_OUTPUTS):
-            outputs_files = [f for f in os.listdir(INPUT_PDB_DIR_OUTPUTS) if f.endswith('.pdb')]
-            print(f"   Available PDB files in outputs: {outputs_files}")
-        print("   Please run Node 5 (node_05_download_pdb.py) first.")
+        print(f"   Searched in: {INPUT_PDB_DIR}")
+        if os.path.exists(INPUT_PDB_DIR):
+            files = [f for f in os.listdir(INPUT_PDB_DIR) if f.endswith('.pdb')]
+            if files:
+                print(f"   Available PDB files in input: {files}")
+        print("   Please ensure 1-protein_preparation has completed and run.sh has copied files to input/.")
         exit(1)
     
     print(f"✓ Found PDB file: {input_pdb_file}")

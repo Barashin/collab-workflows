@@ -23,6 +23,27 @@ else
 fi
 
 # ============================================================================
+# Create input and outputs directories
+# ============================================================================
+INPUT_DIR="${SCRIPT_DIR}/input"
+OUTPUT_DIR="${SCRIPT_DIR}/outputs"
+mkdir -p "${INPUT_DIR}"
+mkdir -p "${OUTPUT_DIR}"
+
+# ============================================================================
+# Move files from Silva mounts to input/ directory
+# ============================================================================
+# Move PDB files from root directory (Silva mounts) to input/
+if [ -d "${SCRIPT_DIR}" ]; then
+    for pdb_file in "${SCRIPT_DIR}"/*.pdb; do
+        if [ -f "${pdb_file}" ]; then
+            mv "${pdb_file}" "${INPUT_DIR}/"
+            echo "✓ Moved $(basename "${pdb_file}") to input/"
+        fi
+    done
+fi
+
+# ============================================================================
 # Run nodes
 # ============================================================================
 python3 node_07_ligand_loading.py

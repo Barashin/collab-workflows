@@ -41,11 +41,9 @@ def load_global_params():
     return DEFAULT_PDB_ID, LIGAND_NAME
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Silva mounts inputs from depends_on nodes to the current directory
-# inputs = ["*.pdb"] means PDB files are mounted at the working directory root
-# Try both root directory and outputs directory
-INPUT_DIR_ROOT = SCRIPT_DIR  # Root of working directory
-INPUT_DIR_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs")  # outputs subdirectory
+# Input from other nodes should be in input/ directory
+# Output from this node should be in outputs/ directory
+INPUT_DIR = os.path.join(SCRIPT_DIR, "input")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 
 def main():
@@ -60,10 +58,8 @@ def main():
     pdb_id = os.environ.get("PDB_ID") or os.environ.get("PARAM_PDB_ID") or global_pdb_id
     ligand_name = os.environ.get("LIGAND_NAME") or os.environ.get("PARAM_LIGAND_NAME") or global_ligand_name
     
-    # Try to find PDB file in root directory first, then outputs directory
-    input_pdb_file = os.path.join(INPUT_DIR_ROOT, f"{pdb_id}.pdb")
-    if not os.path.exists(input_pdb_file):
-        input_pdb_file = os.path.join(INPUT_DIR_OUTPUTS, f"{pdb_id}.pdb")
+    # Find PDB file in input/ directory (copied from other nodes by run.sh)
+    input_pdb_file = os.path.join(INPUT_DIR, f"{pdb_id}.pdb")
     
     output_pdb_file = os.path.join(OUTPUT_DIR, f"{pdb_id}_chain.pdb")
     output_ligand_sdf = os.path.join(OUTPUT_DIR, "real_ligand.sdf")
@@ -72,8 +68,13 @@ def main():
     print(f"Output file: {output_pdb_file}")
     
     if not os.path.exists(input_pdb_file):
-        print(f"❌ Error: {input_pdb_file} not found.")
-        print("   Please run Node 5 (node_05_download_pdb.py) first.")
+        print(f"❌ Error: {pdb_id}.pdb not found.")
+        print(f"   Searched in: {INPUT_DIR}")
+        if os.path.exists(INPUT_DIR):
+            files = [f for f in os.listdir(INPUT_DIR) if f.endswith('.pdb')]
+            if files:
+                print(f"   Available PDB files in input: {files}")
+        print("   Please ensure 1-protein_preparation has completed and run.sh has copied files to input/.")
         exit(1)
     
     # Read PDB file

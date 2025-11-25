@@ -6,6 +6,5 @@ outputs = ["*.sdf", "ligand_library", "variants.svg", "ligand.csv", "ligands.zip
 docker_image = "chiral.sakuracr.jp/smina:2025_11_06"
 
 [scripts]
-pre_run = ""
-post_run = ""
+run = "./run.sh"
 

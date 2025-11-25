@@ -32,7 +32,9 @@ def load_global_params():
     return DEFAULT_PDB_ID, DEFAULT_LIGAND_NAME
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
+# Input from other nodes should be in input/ directory
+# Output from this node should be in outputs/ directory
+INPUT_DIR = os.path.join(SCRIPT_DIR, "input")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 OUTPUT_CONFIG = os.path.join(OUTPUT_DIR, "config.txt")
 
@@ -48,13 +50,15 @@ def main():
     
     # Get chain selection (should match Node 9)
     selected_chain_id = os.environ.get("CHAIN_ID", DEFAULT_CHAIN_ID)
-    input_ligand_list_file = os.path.join(INPUT_DIR, "ligand_list.txt")
+    # ligand_list.txt is output from node_07 in the same node, so check outputs/ first
+    input_ligand_list_file = os.path.join(OUTPUT_DIR, "ligand_list.txt")
     
     print(f"\nInput ligand list file: {input_ligand_list_file}")
     print(f"Output config file: {OUTPUT_CONFIG}")
     
     if not os.path.exists(input_ligand_list_file):
-        print(f"\n❌ Error: {input_ligand_list_file} not found.")
+        print(f"\n❌ Error: ligand_list.txt not found.")
+        print(f"   Searched in: {OUTPUT_DIR}")
         print("   Please run Node 7 (node_07_ligand_loading.py) first.")
         exit(1)
     

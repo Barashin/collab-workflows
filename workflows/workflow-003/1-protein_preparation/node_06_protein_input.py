@@ -10,9 +10,11 @@ import json
 import os
 
 DEFAULT_PDB_ID = "5Y7J"
-# Get script directory and set input directory relative to script location
+# Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
+# This node verifies the output from node_05, which is in outputs/ directory
+# Output from this node should be in outputs/ directory (same as node_05)
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 
 def load_global_params():
     """Load parameters from global_params.json"""
@@ -43,7 +45,8 @@ def main():
         pdb_id = DEFAULT_PDB_ID
         print(f"⚠ Using default PDB ID: {pdb_id}")
     
-    pdb_file = os.path.join(INPUT_DIR, f"{pdb_id}.pdb")
+    # Check outputs directory (node_05 outputs to outputs/)
+    pdb_file = os.path.join(OUTPUT_DIR, f"{pdb_id}.pdb")
     
     print(f"PDB ID: {pdb_id}")
     print(f"File to verify: {pdb_file}")
@@ -53,6 +56,10 @@ def main():
         print(f"✅ File exists: {pdb_file} ({file_size / 1024:.2f} KB)")
     else:
         print(f"❌ Error: {pdb_file} not found.")
+        print(f"   Searched in: {OUTPUT_DIR}")
+        if os.path.exists(OUTPUT_DIR):
+            output_files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith('.pdb')]
+            print(f"   Available PDB files in outputs: {output_files}")
         print("   Please run Node 5 (node_05_download_pdb.py) first.")
         exit(1)
 

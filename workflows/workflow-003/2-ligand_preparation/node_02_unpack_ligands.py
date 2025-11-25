@@ -14,8 +14,14 @@ from rdkit import Chem
 
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_FILE = os.path.join(SCRIPT_DIR, "outputs", "ligands.zip")
+# Input from other nodes should be in input/ directory
+# Output from this node should be in outputs/ directory
+INPUT_DIR = os.path.join(SCRIPT_DIR, "input")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
+INPUT_FILE = os.path.join(INPUT_DIR, "ligands.zip")
+# Fallback to outputs for backward compatibility
+if not os.path.exists(INPUT_FILE):
+    INPUT_FILE = os.path.join(OUTPUT_DIR, "ligands.zip")
 
 def main():
     """Main execution function"""

@@ -15,7 +15,13 @@ from rdkit.Chem import rdMolAlign
 
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
+# Input from other nodes should be in input/ directory
+# Output from this node should be in outputs/ directory
+INPUT_DIR = os.path.join(SCRIPT_DIR, "input", "selected_compounds")
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
+# Fallback to outputs for backward compatibility
+if not os.path.exists(INPUT_DIR):
+    INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
 
 def main():
     """Main execution function"""

@@ -32,23 +32,17 @@ def load_global_params():
     return DEFAULT_PDB_ID
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Silva mounts inputs from depends_on nodes to the current directory
-# inputs = ["*.pdb", "selected_compounds", "config.txt", "real_ligand.sdf"] means:
-# - *.pdb files from 3-docking_preparation may be mounted at root or ./outputs/*.pdb
-# - selected_compounds directory from 2-ligand_preparation may be at root or ./outputs/selected_compounds
-# - config.txt from 3-docking_preparation may be at root or ./outputs/config.txt
-# - real_ligand.sdf from 3-docking_preparation may be at root or ./outputs/real_ligand.sdf
-# Try both root directory and outputs directory
-PREPARATION_DIR_ROOT = SCRIPT_DIR  # Root of working directory
-PREPARATION_DIR_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs")  # outputs subdirectory
-SELECTED_COMPOUNDS_DIR_ROOT = os.path.join(SCRIPT_DIR, "selected_compounds")
-SELECTED_COMPOUNDS_DIR_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
-REAL_LIGAND_ROOT = os.path.join(SCRIPT_DIR, "real_ligand.sdf")
-REAL_LIGAND_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs", "real_ligand.sdf")
+# Input from other nodes should be in input/ directory
+# Output from this node should be in outputs/ directory
+INPUT_DIR = os.path.join(SCRIPT_DIR, "input")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 DOCKING_RESULTS_DIR = os.path.join(OUTPUT_DIR, "docking_results")
-CONFIG_FILE_ROOT = os.path.join(SCRIPT_DIR, "config.txt")
-CONFIG_FILE_OUTPUTS = os.path.join(SCRIPT_DIR, "outputs", "config.txt")
+# Files from 3-docking_preparation
+PREPARATION_DIR = INPUT_DIR
+CONFIG_FILE = os.path.join(INPUT_DIR, "config.txt")
+REAL_LIGAND_INPUT = os.path.join(INPUT_DIR, "real_ligand.sdf")
+# Files from 2-ligand_preparation
+SELECTED_COMPOUNDS_DIR = os.path.join(INPUT_DIR, "selected_compounds")
 
 def main():
     """Main execution function"""
@@ -63,8 +57,7 @@ def main():
     pdb_id = os.environ.get("PDB_ID") or os.environ.get("PARAM_PDB_ID") or global_pdb_id
     chain_id = os.environ.get("CHAIN_ID", DEFAULT_CHAIN_ID)
     
-    # Find receptor file (cleaned PDB from Node 12)
-    # Search for all possible PDB files in both root and outputs directories
+    # Find receptor file (cleaned PDB from Node 12) in input/ directory (copied by run.sh)
     receptor_file = None
     pdb_patterns = []
     
@@ -77,85 +70,65 @@ def main():
         # Try general cleaned PDB
         pdb_patterns.append(f"{pdb_id}_clean.pdb")
     
-    # Search for any matching PDB file in both root and outputs directories
+    # Search for any matching PDB file in input/ directory
     for pattern in pdb_patterns:
-        candidate_root = os.path.join(PREPARATION_DIR_ROOT, pattern)
-        candidate_outputs = os.path.join(PREPARATION_DIR_OUTPUTS, pattern)
-        if os.path.exists(candidate_root):
-            receptor_file = candidate_root
-            break
-        elif os.path.exists(candidate_outputs):
-            receptor_file = candidate_outputs
+        candidate = os.path.join(PREPARATION_DIR, pattern)
+        if os.path.exists(candidate):
+            receptor_file = candidate
             break
     
-    # If still not found, search for any PDB file containing pdb_id in both directories
+    # If still not found, search for any PDB file containing pdb_id in input/ directory
     if not receptor_file:
-        for search_dir in [PREPARATION_DIR_ROOT, PREPARATION_DIR_OUTPUTS]:
-            if os.path.exists(search_dir):
-                all_pdb_files = glob.glob(os.path.join(search_dir, "*.pdb"))
-                for pdb_file in all_pdb_files:
-                    basename = os.path.basename(pdb_file)
-                    if pdb_id in basename and ("clean" in basename or "fixed" in basename):
-                        receptor_file = pdb_file
-                        break
-                if receptor_file:
+        if os.path.exists(PREPARATION_DIR):
+            all_pdb_files = glob.glob(os.path.join(PREPARATION_DIR, "*.pdb"))
+            for pdb_file in all_pdb_files:
+                basename = os.path.basename(pdb_file)
+                if pdb_id in basename and ("clean" in basename or "fixed" in basename):
+                    receptor_file = pdb_file
                     break
     
     if not receptor_file or not os.path.exists(receptor_file):
         print(f"❌ Error: Receptor file not found.")
-        print(f"   Searched in: {PREPARATION_DIR_ROOT}")
-        if os.path.exists(PREPARATION_DIR_ROOT):
-            root_files = [f for f in os.listdir(PREPARATION_DIR_ROOT) if f.endswith('.pdb')]
-            print(f"   Available PDB files in root: {root_files}")
-        print(f"   Searched in: {PREPARATION_DIR_OUTPUTS}")
-        if os.path.exists(PREPARATION_DIR_OUTPUTS):
-            outputs_files = [f for f in os.listdir(PREPARATION_DIR_OUTPUTS) if f.endswith('.pdb')]
-            print(f"   Available PDB files in outputs: {outputs_files}")
+        print(f"   Searched in: {PREPARATION_DIR}")
+        if os.path.exists(PREPARATION_DIR):
+            files = [f for f in os.listdir(PREPARATION_DIR) if f.endswith('.pdb')]
+            if files:
+                print(f"   Available PDB files in input: {files}")
         print(f"   Tried patterns: {pdb_patterns}")
-        print("   Please run Node 12 (node_12_protein_extraction.py) first.")
+        print("   Please ensure 3-docking_preparation has completed and run.sh has copied files to input/.")
         exit(1)
     
-    # Find config file in both root and outputs directories
-    CONFIG_FILE = None
-    if os.path.exists(CONFIG_FILE_ROOT):
-        CONFIG_FILE = CONFIG_FILE_ROOT
-    elif os.path.exists(CONFIG_FILE_OUTPUTS):
-        CONFIG_FILE = CONFIG_FILE_OUTPUTS
-    
-    if not CONFIG_FILE or not os.path.exists(CONFIG_FILE):
+    # Check config file in input/ directory (copied by run.sh)
+    if not os.path.exists(CONFIG_FILE):
         print(f"❌ Error: config.txt not found.")
-        print(f"   Searched in: {CONFIG_FILE_ROOT}")
-        print(f"   Searched in: {CONFIG_FILE_OUTPUTS}")
-        print("   Please run Node 11 (node_11_ligand_center_identification.py) first.")
+        print(f"   Searched in: {CONFIG_FILE}")
+        if os.path.exists(INPUT_DIR):
+            files = [f for f in os.listdir(INPUT_DIR) if f.endswith('.txt')]
+            if files:
+                print(f"   Available text files in input: {files}")
+        print("   Please ensure 3-docking_preparation has completed and run.sh has copied files to input/.")
         exit(1)
     
-    # Find selected_compounds directory in both root and outputs directories
-    SELECTED_COMPOUNDS_DIR = None
-    if os.path.exists(SELECTED_COMPOUNDS_DIR_ROOT):
-        SELECTED_COMPOUNDS_DIR = SELECTED_COMPOUNDS_DIR_ROOT
-    elif os.path.exists(SELECTED_COMPOUNDS_DIR_OUTPUTS):
-        SELECTED_COMPOUNDS_DIR = SELECTED_COMPOUNDS_DIR_OUTPUTS
-    
-    if not SELECTED_COMPOUNDS_DIR or not os.path.exists(SELECTED_COMPOUNDS_DIR):
+    # Check selected_compounds directory in input/ directory (copied by run.sh)
+    if not os.path.exists(SELECTED_COMPOUNDS_DIR):
         print(f"❌ Error: selected_compounds directory not found.")
-        print(f"   Searched in: {SELECTED_COMPOUNDS_DIR_ROOT}")
-        print(f"   Searched in: {SELECTED_COMPOUNDS_DIR_OUTPUTS}")
-        print("   Please run Node 9 (node_09_real_ligand_addition.py) first.")
+        print(f"   Searched in: {SELECTED_COMPOUNDS_DIR}")
+        if os.path.exists(INPUT_DIR):
+            dirs = [d for d in os.listdir(INPUT_DIR) if os.path.isdir(os.path.join(INPUT_DIR, d))]
+            if dirs:
+                print(f"   Available directories in input: {dirs}")
+        print("   Please ensure 2-ligand_preparation has completed and run.sh has copied files to input/.")
         exit(1)
     
     # Find all SDF files in selected_compounds directory
     sdf_pattern = os.path.join(SELECTED_COMPOUNDS_DIR, "*.sdf")
     ligand_files = sorted(glob.glob(sdf_pattern))
     
-    # Find real_ligand.sdf from 3-docking_preparation (mounted by Silva)
-    # Check both root and outputs directories
+    # Find real_ligand.sdf from 3-docking_preparation in input/ directory (copied by run.sh)
     real_ligand_source = None
-    if os.path.exists(REAL_LIGAND_ROOT):
-        real_ligand_source = REAL_LIGAND_ROOT
-        print(f"✓ Found real_ligand.sdf at root: {REAL_LIGAND_ROOT}")
-    elif os.path.exists(REAL_LIGAND_OUTPUTS):
-        real_ligand_source = REAL_LIGAND_OUTPUTS
-        print(f"✓ Found real_ligand.sdf at outputs: {REAL_LIGAND_OUTPUTS}")
+    if os.path.exists(REAL_LIGAND_INPUT):
+        real_ligand_source = REAL_LIGAND_INPUT
+        print(f"✓ Found real_ligand.sdf in input: {REAL_LIGAND_INPUT}")
     
     # Check if real_ligand.sdf exists in selected_compounds directory
     real_ligand_in_selected = os.path.join(SELECTED_COMPOUNDS_DIR, "real_ligand.sdf")
@@ -175,8 +148,8 @@ def main():
             except Exception as e:
                 print(f"  ⚠ Warning: Could not copy real_ligand.sdf: {e}")
         else:
-            print(f"⚠ Warning: real_ligand.sdf not found in any location")
-            print(f"   Searched: {REAL_LIGAND_ROOT}, {REAL_LIGAND_OUTPUTS}")
+            print(f"⚠ Warning: real_ligand.sdf not found in input directory")
+            print(f"   Searched: {REAL_LIGAND_INPUT}")
     
     # Add real_ligand.sdf to ligand_files if it exists and is not already in the list
     if real_ligand_in_selected_exists:

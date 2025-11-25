@@ -23,7 +23,55 @@ else
 fi
 
 # ============================================================================
+# Create input and outputs directories
+# ============================================================================
+INPUT_DIR="${SCRIPT_DIR}/input"
+OUTPUT_DIR="${SCRIPT_DIR}/outputs"
+mkdir -p "${INPUT_DIR}"
+mkdir -p "${OUTPUT_DIR}"
+
+# Clean previous outputs to avoid nested directories when Silva copies results
+# This is critical to prevent outputs/outputs creation on re-runs
+if [ -d "${OUTPUT_DIR}" ]; then
+    echo "Cleaning previous outputs in ${OUTPUT_DIR}"
+    rm -rf "${OUTPUT_DIR:?}/"*
+fi
+
+# ============================================================================
+# Move files from Silva mounts to input/ directory
+# ============================================================================
+# Move PDB files from root directory (Silva mounts) to input/
+if [ -d "${SCRIPT_DIR}" ]; then
+    for pdb_file in "${SCRIPT_DIR}"/*.pdb; do
+        if [ -f "${pdb_file}" ]; then
+            mv "${pdb_file}" "${INPUT_DIR}/"
+            echo "✓ Moved $(basename "${pdb_file}") to input/"
+        fi
+    done
+fi
+
+# Move docking_results directory from root directory (Silva mounts) to input/
+if [ -d "${SCRIPT_DIR}/docking_results" ]; then
+    mv "${SCRIPT_DIR}/docking_results" "${INPUT_DIR}/"
+    echo "✓ Moved docking_results directory to input/"
+fi
+
+# ============================================================================
 # Run nodes
 # ============================================================================
 python3 node_14_reporting.py
+
+# ============================================================================
+# Post-run cleanup: Fix nested outputs if present (outputs/outputs -> outputs)
+# ============================================================================
+if [ -d "${OUTPUT_DIR}/outputs" ]; then
+    echo "⚠️ Detected nested outputs directory. Flattening structure..."
+    # Move contents if not empty
+    if [ "$(ls -A "${OUTPUT_DIR}/outputs")" ]; then
+        mv "${OUTPUT_DIR}/outputs"/* "${OUTPUT_DIR}/"
+    fi
+    # Remove empty nested directory
+    rm -rf "${OUTPUT_DIR}/outputs"
+    echo "✓ Flattened outputs directory"
+fi
 
