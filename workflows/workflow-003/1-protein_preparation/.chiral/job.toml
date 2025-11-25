@@ -4,8 +4,5 @@ outputs = ["*.pdb"]
 docker_image = "chiral.sakuracr.jp/smina:2025_11_06"
 
 [scripts]
-<<<<<<<< HEAD:workflows/workflow-003/1-protein_preparation/.chiral/job.toml
 run = "./run.sh"
-========
->>>>>>>> origin/9-docking-workflow-from-koki:workflows/workflow-003/update_job1/protein/.chiral/job.toml
 
