@@ -421,13 +421,25 @@ def minimize_energy(sdf_file):
             print(f"    Error: obminimize command not found")
             return False
         
-        # Create temporary file
-        temp_file = sdf_file + ".tmp"
-        
         # Use absolute path to avoid path issues
         abs_sdf_file = os.path.abspath(sdf_file)
+        
+        # Check if input file exists and is readable
+        if not os.path.exists(abs_sdf_file):
+            print(f"    Error: Input file does not exist: {abs_sdf_file}")
+            return False
+        
+        if os.path.getsize(abs_sdf_file) == 0:
+            print(f"    Error: Input file is empty: {abs_sdf_file}")
+            return False
+        
+        # Create temporary file for output
+        # obminimize outputs to stdout, so we redirect to temp file
+        temp_file = sdf_file + ".tmp"
         abs_temp_file = os.path.abspath(temp_file)
         
+        # obminimize command: obminimize -ff MMFF94 -n 1000 $i
+        # Output goes to stdout, so we redirect to temp file
         with open(abs_temp_file, "w") as outfile:
             result = subprocess.run(
                 [obminimize_cmd, "-ff", "MMFF94", "-n", "1000", abs_sdf_file],
@@ -437,10 +449,19 @@ def minimize_energy(sdf_file):
                 timeout=300
             )
         
-        if result.returncode == 0 and os.path.exists(abs_temp_file) and os.path.getsize(abs_temp_file) > 0:
-            # Replace original file
-            os.replace(abs_temp_file, abs_sdf_file)
-            return True
+        # Check if output file was created and is not empty
+        if result.returncode == 0:
+            if os.path.exists(abs_temp_file) and os.path.getsize(abs_temp_file) > 0:
+                # Replace original file
+                os.replace(abs_temp_file, abs_sdf_file)
+                return True
+            else:
+                print(f"    Error: Output file was not created or is empty")
+                if os.path.exists(abs_temp_file):
+                    os.remove(abs_temp_file)
+                if result.stderr:
+                    print(f"    obminimize stderr: {result.stderr[:300]}")
+                return False
         else:
             if os.path.exists(abs_temp_file):
                 os.remove(abs_temp_file)
