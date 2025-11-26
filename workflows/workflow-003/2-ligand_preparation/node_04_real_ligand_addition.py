@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Node 6: Real ligand addition - Combine prepared ligands with real ligand from PDB
-Input: ligands_3D.sdf (from Node 4), real_ligand.sdf (from Node 8)
-Output: real_ligands_3D_sdf (combined ligands)
+Node 4: Real ligand addition - Add real ligand from PDB to selected compounds
+Input: input/real_ligand.sdf (from 3-docking_preparation), outputs/selected_compounds/ (from Node 3)
+Output: outputs/selected_compounds/real_ligand.sdf (real ligand added to library)
+Note: This runs before Node 5 (prepare_ligands) so that real_ligand is also prepared
 """
 
 import os
@@ -22,7 +23,7 @@ REAL_LIGAND_INPUT = os.path.join(INPUT_DIR, "real_ligand.sdf")
 
 def main():
     """Main execution function"""
-    print("=== Node 6: Real ligand addition ===")
+    print("=== Node 4: Real ligand addition ===")
     
     # Ensure selected_compounds directory exists
     os.makedirs(SELECTED_COMPOUNDS_DIR, exist_ok=True)

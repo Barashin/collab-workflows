@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Node 4: Ligand Preparation - Add hydrogens, assign charges, generate 3D structures, and minimize energy
-Input: outputs/selected_compounds/*.sdf (SDF files from Node 3 and real_ligand.sdf from Node 9)
+Node 5: Ligand Preparation - Add hydrogens, assign charges, generate 3D structures, and minimize energy
+Input: outputs/selected_compounds/*.sdf (SDF files from Node 3 and real_ligand.sdf from Node 4)
 Output: outputs/selected_compounds/*.sdf (prepared SDF files with 3D structures)
 """
 
@@ -16,26 +16,26 @@ from rdkit.Chem import rdMolAlign
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Process all ligands (library + real_ligand) from outputs/selected_compounds
-# This includes ligands from Node 3 and real_ligand from Node 9
+# This includes ligands from Node 3 and real_ligand from Node 4
 INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
 
 def main():
     """Main execution function"""
-    print("=== Node 4: Ligand Preparation ===")
+    print("=== Node 5: Ligand Preparation ===")
     
     if not os.path.exists(INPUT_DIR):
         print(f"❌ Error: {INPUT_DIR} directory not found.")
-        print("   Please run Node 3 (node_03_ligand_selection.py) and Node 9 (node_09_real_ligand_addition.py) first.")
+        print("   Please run Node 3 (node_03_ligand_selection.py) and Node 4 (node_04_real_ligand_addition.py) first.")
         exit(1)
     
-    # Find all SDF files (including real_ligand.sdf from Node 9)
+    # Find all SDF files (including real_ligand.sdf from Node 4)
     sdf_pattern = os.path.join(INPUT_DIR, "*.sdf")
     sdf_files = sorted(glob.glob(sdf_pattern))
     
     if not sdf_files:
         print(f"❌ Error: No SDF files found in {INPUT_DIR}.")
-        print("   Please run Node 3 (node_03_ligand_selection.py) and Node 9 (node_09_real_ligand_addition.py) first.")
+        print("   Please run Node 3 (node_03_ligand_selection.py) and Node 4 (node_04_real_ligand_addition.py) first.")
         exit(1)
     
     print(f"Input directory: {INPUT_DIR}")
@@ -89,11 +89,14 @@ def main():
 
 
 def add_hydrogens_obabel(sdf_file):
-    """Add hydrogens to SDF file using obabel"""
+    """Add hydrogens to SDF file using obabel with pH consideration"""
     try:
         abs_sdf_file = os.path.abspath(sdf_file)
+        # -h: add hydrogens
+        # -p 7.4: consider protonation at physiological pH (7.4)
+        # This ensures all atoms get hydrogens with proper protonation state
         result = subprocess.run(
-            ["obabel", abs_sdf_file, "-O", abs_sdf_file, "-h"],
+            ["obabel", abs_sdf_file, "-O", abs_sdf_file, "-h", "-p", "7.4"],
             capture_output=True,
             text=True,
             timeout=60

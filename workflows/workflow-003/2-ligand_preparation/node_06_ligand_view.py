@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Node 10: Ligand View - Export ligand information to CSV
+Node 6: Ligand View - Export ligand information to CSV
 Input: selected_compounds/ (directory with individual SDF files)
 Output: ligand.csv (CSV file with ligand information)
 """
@@ -14,45 +14,42 @@ from rdkit.Chem import Descriptors
 
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Input from other nodes should be in input/ directory
+# Read prepared ligands from outputs/selected_compounds (from Node 5)
 # Output from this node should be in outputs/ directory
-INPUT_DIR = os.path.join(SCRIPT_DIR, "input", "selected_compounds")
+INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "ligand.csv")
-# Fallback to outputs for backward compatibility
-if not os.path.exists(INPUT_DIR):
-    INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
 
 def main():
     """Main execution function"""
-    print("=== Node 10: Ligand View ===")
+    print("=== Node 6: Ligand View ===")
     
     if not os.path.exists(INPUT_DIR):
         print(f"❌ Error: {INPUT_DIR} directory not found.")
-        print("   Please run Node 6 (node_06_real_ligand_addition.py) first.")
+        print("   Please run Node 5 (node_05_prepare_ligands.py) first.")
         exit(1)
     
     # Create output directory
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
     # Find all SDF files in the selected_compounds directory
-    # Include both Node 5 selected ligands and Node 10 PDB-extracted ligands
+    # Include both Node 3 selected ligands and Node 4 real_ligand
     sdf_pattern = os.path.join(INPUT_DIR, "*.sdf")
     sdf_files = sorted(glob.glob(sdf_pattern))
     
     if not sdf_files:
         print(f"❌ Error: No SDF files found in {INPUT_DIR}.")
-        print("   Please run Node 6 (node_06_real_ligand_addition.py) first.")
+        print("   Please run Node 5 (node_05_prepare_ligands.py) first.")
         exit(1)
     
-    # Count PDB-extracted ligands for information
-    pdb_ligand_count = len([f for f in sdf_files if "_chain_" in os.path.basename(f)])
-    node5_ligand_count = len(sdf_files) - pdb_ligand_count
+    # Count real_ligand for information
+    real_ligand_count = len([f for f in sdf_files if os.path.basename(f) == "real_ligand.sdf"])
+    library_ligand_count = len(sdf_files) - real_ligand_count
     
-    if pdb_ligand_count > 0:
-        print(f"   Found {pdb_ligand_count} PDB-extracted ligand(s)")
-    if node5_ligand_count > 0:
-        print(f"   Found {node5_ligand_count} selected ligand(s) from Node 3")
+    if real_ligand_count > 0:
+        print(f"   Found {real_ligand_count} real ligand(s) from Node 4")
+    if library_ligand_count > 0:
+        print(f"   Found {library_ligand_count} selected ligand(s) from Node 3")
     
     print(f"Input directory: {INPUT_DIR}")
     print(f"Number of SDF files found: {len(sdf_files)}")

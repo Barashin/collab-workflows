@@ -46,17 +46,21 @@ Downloads, unpacks, selects, and prepares ligand compounds for docking.
 - **`node_01_download_ligands.py`**: Downloads ligand library ZIP file
 - **`node_02_unpack_ligands.py`**: Unpacks the ligand library
 - **`node_03_ligand_selection.py`**: Selects specific ligands from the library
-- **`node_04_prepare_ligands.py`**: Prepares ligands (adds hydrogens, assigns charges, minimizes energy)
-- **`node_09_real_ligand_addition.py`**: Adds the real ligand from PDB to the selected compounds
-- **`node_10_ligand_view.py`**: Generates visualization of ligands
+- **`node_04_real_ligand_addition.py`**: Adds the real ligand from PDB to the selected compounds
+- **`node_05_prepare_ligands.py`**: Prepares all ligands (library + real_ligand) - adds hydrogens, assigns charges, generates 3D structures, minimizes energy
+- **`node_06_ligand_view.py`**: Exports ligand information to CSV file
 
 **Process:**
 1. Downloads a ligand library ZIP file from a specified URL
 2. Unpacks the library to extract SDF files
 3. Selects specific compounds based on criteria
-4. Prepares each ligand using Open Babel (adds hydrogens, assigns charges, minimizes energy)
-5. Adds the real ligand extracted from the PDB structure
-6. Generates visualization files
+4. Adds the real ligand extracted from the PDB structure to the selected compounds
+5. Prepares all ligands (library + real_ligand) using Open Babel and RDKit:
+   - Adds hydrogens with pH 7.4 consideration (proper protonation state)
+   - Assigns Gasteiger partial charges
+   - Generates 3D structures using RDKit
+   - Minimizes energy using MMFF94 force field
+6. Exports ligand information (SMILES, molecular weight, LogP, etc.) to CSV file
 
 **Input:**
 - `*.pdb` from `1-protein_preparation`
@@ -205,7 +209,7 @@ The workflow is executed using **Silva**, which automatically manages dependenci
     ↓
 3-docking_preparation (Node 7-8, 11-12) ← 1-protein_preparation
     ↓                                    ↓
-2-ligand_preparation (Node 1-4, 9-10) ← 1-protein_preparation, 3-docking_preparation
+2-ligand_preparation (Node 1-6) ← 1-protein_preparation, 3-docking_preparation
     ↓
 4-docking (Node 13) ← 2-ligand_preparation, 3-docking_preparation
     ↓
@@ -277,8 +281,7 @@ workflow-003/
 │       ├── selected_compounds/
 │       │   ├── *.sdf
 │       │   └── real_ligand.sdf
-│       ├── ligand.csv
-│       └── variants.svg
+│       └── ligand.csv
 ├── 3-docking_preparation/
 │   └── outputs/
 │       ├── {pdb_id}_chain.pdb
@@ -332,7 +335,7 @@ All dependencies are installed inside the Docker container (`chiral.sakuracr.jp/
 - **SMINA** - Enhanced AutoDock Vina for molecular docking
 - **BioPython** - Biological computation library for PDB parsing
 - **OpenMM / PDBFixer** - Protein structure cleaning and preparation
-- **Open Babel** - Ligand preparation (hydrogen addition, charge assignment, energy minimization)
+- **Open Babel** - Ligand preparation (hydrogen addition with pH 7.4 consideration, charge assignment, energy minimization)
 - **NumPy** - Numerical computing
 
 ---
@@ -383,7 +386,7 @@ bash run.sh
 
 1. **File Mounting**: Silva mounts outputs from upstream nodes to the current node's working directory. Scripts check both the root directory and `outputs/` subdirectory to handle different mounting patterns.
 
-2. **Ligand Preparation**: The `node_04_prepare_ligands.py` script uses Open Babel to prepare ligands. Failed preparations are logged but don't stop the workflow.
+2. **Ligand Preparation**: The `node_05_prepare_ligands.py` script prepares all ligands (library + real_ligand) using Open Babel and RDKit. It adds hydrogens with pH 7.4 consideration for proper protonation state, assigns Gasteiger charges, generates 3D structures, and minimizes energy. Failed preparations are logged but don't stop the workflow.
 
 3. **Protein Cleaning**: PDBFixer may remove cofactors (like NAD) during cleaning. The workflow handles this by preserving important cofactors when possible.
 
