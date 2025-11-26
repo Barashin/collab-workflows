@@ -46,8 +46,10 @@ fi
 # ============================================================================
 # Run nodes
 # ============================================================================
-python3 node_07_ligand_loading.py
-python3 node_08_extract_chains.py
-python3 node_11_ligand_center_identification.py
-python3 node_12_protein_extraction.py
+# Change to script directory to ensure relative paths work correctly
+cd "${SCRIPT_DIR}"
+python3 "${SCRIPT_DIR}/node_07_ligand_loading.py"
+python3 "${SCRIPT_DIR}/node_08_extract_chains.py"
+python3 "${SCRIPT_DIR}/node_11_ligand_center_identification.py"
+python3 "${SCRIPT_DIR}/node_12_protein_extraction.py"
 

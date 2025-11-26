@@ -33,6 +33,8 @@ mkdir -p "${OUTPUT_DIR}"
 # ============================================================================
 # Run nodes
 # ============================================================================
-python3 node_05_download_pdb.py
-python3 node_06_protein_input.py
+# Change to script directory to ensure relative paths work correctly
+cd "${SCRIPT_DIR}"
+python3 "${SCRIPT_DIR}/node_05_download_pdb.py"
+python3 "${SCRIPT_DIR}/node_06_protein_input.py"
 

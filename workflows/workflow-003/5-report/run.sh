@@ -59,7 +59,9 @@ fi
 # ============================================================================
 # Run nodes
 # ============================================================================
-python3 node_14_reporting.py
+# Change to script directory to ensure relative paths work correctly
+cd "${SCRIPT_DIR}"
+python3 "${SCRIPT_DIR}/node_14_reporting.py"
 
 # ============================================================================
 # Post-run cleanup: Fix nested outputs if present (outputs/outputs -> outputs)

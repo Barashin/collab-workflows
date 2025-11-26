@@ -71,5 +71,7 @@ fi
 # ============================================================================
 # Run nodes
 # ============================================================================
-python3 node_13_smina_screening.py
+# Change to script directory to ensure relative paths work correctly
+cd "${SCRIPT_DIR}"
+python3 "${SCRIPT_DIR}/node_13_smina_screening.py"
 
