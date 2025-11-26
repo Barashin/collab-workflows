@@ -13,7 +13,8 @@ DEFAULT_PDB_ID = "5Y7J"
 # Default ligand name (can be overridden by environment variable or global_params.json)
 DEFAULT_LIGAND_NAME = "8OL"
 # Default chain ID (can be overridden by environment variable, should match Node 9)
-DEFAULT_CHAIN_ID = "A"
+# None means all chains (default behavior)
+DEFAULT_CHAIN_ID = None
 
 def load_global_params():
     """Load parameters from global_params.json"""
@@ -49,7 +50,8 @@ def main():
     global_pdb_id, global_ligand_name = load_global_params()
     
     # Get chain selection (should match Node 9)
-    selected_chain_id = os.environ.get("CHAIN_ID", DEFAULT_CHAIN_ID)
+    # If CHAIN_ID is not set, use DEFAULT_CHAIN_ID (None means all chains)
+    selected_chain_id = os.environ.get("CHAIN_ID") or DEFAULT_CHAIN_ID
     # ligand_list.txt is output from node_07 in the same node, so check outputs/ first
     input_ligand_list_file = os.path.join(OUTPUT_DIR, "ligand_list.txt")
     
@@ -86,49 +88,63 @@ def generate_config_file(ligand_list_file, output_config_file, selected_chain_id
     # Get ligand selection from environment variables, global_params.json, or use defaults
     selected_ligand_name = os.environ.get("LIGAND_NAME") or os.environ.get("PARAM_LIGAND_NAME") or default_ligand_name or DEFAULT_LIGAND_NAME
     
+    print(f"\nSearching for ligand '{selected_ligand_name}' from global_params.json...")
+    
     # Read ligand center coordinates from ligand_list.txt
     center_x = None
     center_y = None
     center_z = None
     current_chain = None
     current_ligand = None
+    matching_ligands = []  # Store all matching ligands
     
-    print(f"\nSearching for ligand in chain '{selected_chain_id}' (matching Node 9 protein extraction selection)...")
-    
-    # Priority 1: Find specified ligand in the selected chain
-    if selected_chain_id:
-        with open(ligand_list_file, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                
-                # Check for chain header
-                if line.startswith("Chain "):
-                    current_chain = line.split()[1].rstrip(":")
-                    continue
-                
-                # Check for ligand name
-                if line.startswith("Ligand: "):
-                    current_ligand = line.split(":", 1)[1].strip()
-                    continue
-                
-                # Check for center coordinates line
-                if line.startswith("Center coordinates"):
-                    # Parse: "Center coordinates (x, y, z): 42.286, 13.914, 31.628"
-                    if ":" in line and current_chain == selected_chain_id:
+    # Priority 1: Find all ligands matching the specified ligand name
+    with open(ligand_list_file, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            
+            # Check for chain header
+            if line.startswith("Chain "):
+                current_chain = line.split()[1].rstrip(":")
+                continue
+            
+            # Check for ligand name
+            if line.startswith("Ligand: "):
+                current_ligand = line.split(":", 1)[1].strip()
+                continue
+            
+            # Check for center coordinates line
+            if line.startswith("Center coordinates"):
+                if ":" in line and current_ligand:
+                    ligand_match = current_ligand.upper() == selected_ligand_name.upper()
+                    if ligand_match:
                         coords_str = line.split(":", 1)[1].strip()
                         coords = [float(x.strip()) for x in coords_str.split(",")]
                         if len(coords) == 3:
-                            ligand_match = (current_ligand and 
-                                          current_ligand.upper() == selected_ligand_name.upper())
-                            if ligand_match:
-                                center_x, center_y, center_z = coords
-                                print(f"✓ Found ligand '{current_ligand}' in chain '{current_chain}'")
-                                break
+                            matching_ligands.append((current_chain, current_ligand, coords))
+    
+    # Use first matching ligand (from global_params.json)
+    if matching_ligands:
+        if selected_chain_id:
+            # Try to find in selected chain first
+            for chain, ligand, coords in matching_ligands:
+                if chain == selected_chain_id:
+                    center_x, center_y, center_z = coords
+                    print(f"✓ Found ligand '{ligand}' in chain '{chain}' (matching global_params.json)")
+                    break
+        
+        # If not found in selected chain, use first matching ligand
+        if center_x is None:
+            chain, ligand, coords = matching_ligands[0]
+            center_x, center_y, center_z = coords
+            if len(matching_ligands) > 1:
+                print(f"✓ Found {len(matching_ligands)} matching ligands. Using first one: '{ligand}' in chain '{chain}'")
+            else:
+                print(f"✓ Found ligand '{ligand}' in chain '{chain}' (matching global_params.json)")
     
     # Priority 2: If no matching ligand found, use any ligand in the selected chain
     if center_x is None and selected_chain_id:
-        print(f"⚠ Ligand '{selected_ligand_name}' not found in chain '{selected_chain_id}'")
-        print(f"   Searching for any ligand in chain '{selected_chain_id}'...")
+        print(f"⚠ Ligand '{selected_ligand_name}' not found. Searching for any ligand in chain '{selected_chain_id}'...")
         
         with open(ligand_list_file, "r", encoding="utf-8") as f:
             current_chain = None
@@ -154,7 +170,7 @@ def generate_config_file(ligand_list_file, output_config_file, selected_chain_id
     
     # Priority 3: If still no ligand found, use first ligand in the file (fallback)
     if center_x is None:
-        print(f"⚠ No ligand found in chain '{selected_chain_id}'. Using first ligand from file as fallback...")
+        print(f"⚠ No ligand found. Using first ligand from file as fallback...")
         with open(ligand_list_file, "r", encoding="utf-8") as f:
             current_chain = None
             for line in f:

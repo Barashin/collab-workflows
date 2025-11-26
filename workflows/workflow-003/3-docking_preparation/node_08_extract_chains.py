@@ -15,14 +15,16 @@ Environment variables:
 import os
 import json
 import tempfile
+import subprocess
+import numpy as np
 from Bio.PDB import PDBIO, PDBParser, Select
-from rdkit import Chem
 
 DEFAULT_PDB_ID = "5Y7J"
 LIGAND_NAME = "8OL"
 # Default chain ID (can be overridden by environment variable CHAIN_ID)
 # Can be a single chain (e.g., "A") or multiple chains separated by commas (e.g., "A,B")
-DEFAULT_CHAIN_ID = "A"  # Default is chain A
+# None means all chains (default behavior)
+DEFAULT_CHAIN_ID = None  # Default is all chains
 
 def load_global_params():
     """Load parameters from global_params.json"""
@@ -63,6 +65,7 @@ def main():
     
     output_pdb_file = os.path.join(OUTPUT_DIR, f"{pdb_id}_chain.pdb")
     output_ligand_sdf = os.path.join(OUTPUT_DIR, "real_ligand.sdf")
+    output_config_file = os.path.join(OUTPUT_DIR, "config.txt")
     
     print(f"Input file: {input_pdb_file}")
     print(f"Output file: {output_pdb_file}")
@@ -87,14 +90,15 @@ def main():
     print(f"\nChains present in PDB file: {', '.join(unique_chains)}")
     
     # Get chain IDs to extract from environment variable
-    chain_id_env = os.environ.get("CHAIN_ID", DEFAULT_CHAIN_ID)
+    # If CHAIN_ID is not set, use DEFAULT_CHAIN_ID (None means all chains)
+    chain_id_env = os.environ.get("CHAIN_ID") or DEFAULT_CHAIN_ID
     
     # Parse chain IDs (can be comma-separated like "A,B" or single like "A")
     if chain_id_env:
-        selected_chains = [c.strip().upper() for c in chain_id_env.split(",")]
+        selected_chains = [c.strip().upper() for c in str(chain_id_env).split(",")]
         selected_chains = [c for c in selected_chains if c]  # Remove empty strings
     else:
-        # If not specified, extract all chains
+        # If not specified, extract all chains (default behavior)
         selected_chains = unique_chains
         print(f"No CHAIN_ID specified. Will extract all chains: {', '.join(selected_chains)}")
     
@@ -130,24 +134,62 @@ def main():
     io.save(output_pdb_file, ChainAndLigandSelect(selected_chains, ligand_name))
     print(f"✅ Chain extraction complete: {output_pdb_file}")
     
-    # Extract real ligand from selected chains and save as SDF
-    extract_ligand_to_sdf(input_pdb_file, ligand_name, output_ligand_sdf, selected_chains)
+    # Extract real ligand coordinates from selected chains and save as SDF
+    ligand_center = extract_ligand_to_sdf(input_pdb_file, ligand_name, output_ligand_sdf, selected_chains)
+    
+    # Generate config.txt file with ligand center coordinates
+    if ligand_center is not None:
+        generate_config_file(ligand_center, output_config_file)
+        print(f"✅ Config file generated: {output_config_file}")
+    else:
+        print(f"⚠ Warning: Could not calculate ligand center coordinates. Config file not generated.")
 
 
 def extract_ligand_to_sdf(pdb_file, ligand_name, output_sdf_file, selected_chains):
     """
-    Extract a specific ligand from selected chains in PDB file and save as SDF.
+    Extract coordinates of a specific ligand from selected chains in PDB file and save as SDF.
+    Only extracts coordinates - no bond information or aromaticity processing.
+    Also calculates and returns the center coordinates of the ligand.
     
     Args:
         pdb_file: Path to input PDB file
-        ligand_name: Name of the ligand residue
+        ligand_name: Name of the ligand residue (from global_params.json)
         output_sdf_file: Path to output SDF file
         selected_chains: List of chain IDs to extract ligand from
+    
+    Returns:
+        tuple: (center_x, center_y, center_z) or None if ligand not found
     """
     try:
         # Parse PDB file
         parser = PDBParser(QUIET=True)
         structure = parser.get_structure("protein", pdb_file)
+        
+        # Calculate ligand center coordinates from PDB structure
+        ligand_coords = []
+        for model in structure:
+            for chain in model:
+                if chain.id in selected_chains:
+                    for residue in chain:
+                        residue_name = residue.get_resname().strip().upper()
+                        if residue_name == ligand_name.upper():
+                            for atom in residue:
+                                try:
+                                    coord = atom.get_coord()
+                                    ligand_coords.append(coord)
+                                except:
+                                    continue
+        
+        # Calculate center coordinates
+        ligand_center = None
+        if ligand_coords:
+            coords_array = np.array(ligand_coords)
+            center = np.mean(coords_array, axis=0)
+            ligand_center = (center[0], center[1], center[2])
+            print(f"✓ Calculated ligand center coordinates: ({ligand_center[0]:.3f}, {ligand_center[1]:.3f}, {ligand_center[2]:.3f})")
+        else:
+            print(f"⚠ Warning: Ligand '{ligand_name}' not found in selected chains: {', '.join(selected_chains)}")
+            return None
         
         # Create a Select class to extract only the specified ligand from selected chains
         class LigandSelect(Select):
@@ -162,7 +204,7 @@ def extract_ligand_to_sdf(pdb_file, ligand_name, output_sdf_file, selected_chain
                 return (residue_name == self.ligand_name and 
                         chain_id in self.chain_ids)
         
-        # Save ligand to temporary PDB file
+        # Save ligand to temporary PDB file (coordinates only)
         temp_fd, temp_pdb_file = tempfile.mkstemp(suffix=".pdb", prefix="ligand_")
         os.close(temp_fd)
         
@@ -174,30 +216,85 @@ def extract_ligand_to_sdf(pdb_file, ligand_name, output_sdf_file, selected_chain
         if os.path.getsize(temp_pdb_file) == 0:
             print(f"⚠ Warning: Ligand '{ligand_name}' not found in selected chains: {', '.join(selected_chains)}")
             os.remove(temp_pdb_file)
-            return
+            return None
         
-        # Read molecule from temporary PDB using RDKit
-        mol = Chem.MolFromPDBFile(temp_pdb_file, removeHs=False)
-        
-        if mol is None:
-            print(f"⚠ Warning: Could not parse ligand '{ligand_name}' using RDKit.")
+        # Convert PDB to SDF (coordinates only, no processing)
+        try:
+            abs_temp_pdb = os.path.abspath(temp_pdb_file)
+            abs_output_sdf = os.path.abspath(output_sdf_file)
+            
+            # Convert PDB to SDF directly (coordinates only)
+            result = subprocess.run(
+                ["obabel", abs_temp_pdb, "-O", abs_output_sdf],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode != 0:
+                print(f"⚠ Warning: obabel PDB->SDF conversion failed")
+                print(f"   Return code: {result.returncode}")
+                print(f"   stderr: {result.stderr}")
+                print(f"   stdout: {result.stdout}")
+                os.remove(temp_pdb_file)
+                return ligand_center
+            
+            if not os.path.exists(output_sdf_file) or os.path.getsize(output_sdf_file) == 0:
+                print(f"⚠ Warning: SDF file was not created or is empty.")
+                os.remove(temp_pdb_file)
+                return ligand_center
+                
+        except subprocess.TimeoutExpired:
+            print(f"⚠ Warning: obabel conversion timed out.")
             os.remove(temp_pdb_file)
-            return
+            return ligand_center
+        except Exception as e:
+            print(f"⚠ Warning: Error running obabel: {e}")
+            os.remove(temp_pdb_file)
+            return ligand_center
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_pdb_file):
+                os.remove(temp_pdb_file)
         
-        # Save to SDF
-        writer = Chem.SDWriter(output_sdf_file)
-        writer.write(mol)
-        writer.close()
+        print(f"✅ Extracted ligand '{ligand_name}' coordinates from chain(s) {', '.join(selected_chains)} and saved to: {os.path.basename(output_sdf_file)}")
         
-        # Clean up temporary file
-        os.remove(temp_pdb_file)
-        
-        print(f"✅ Extracted ligand '{ligand_name}' from chain(s) {', '.join(selected_chains)} and saved to: {os.path.basename(output_sdf_file)}")
+        return ligand_center
         
     except Exception as e:
         print(f"⚠ Warning: Error extracting ligand '{ligand_name}': {e}")
         import traceback
         traceback.print_exc()
+        return None
+
+
+def generate_config_file(ligand_center, output_config_file):
+    """
+    Generate docking configuration file with ligand center coordinates.
+    
+    Args:
+        ligand_center: Tuple of (center_x, center_y, center_z)
+        output_config_file: Path to output config.txt file
+    """
+    center_x, center_y, center_z = ligand_center
+    
+    # Generate config file
+    config_lines = [
+        f"center_x = {center_x:.3f}",
+        f"center_y = {center_y:.3f}",
+        f"center_z = {center_z:.3f}",
+        "size_x   = 15",  # Use fixed value
+        "size_y   = 15",
+        "size_z   = 15",
+        "exhaustiveness = 8",  # Search intensity
+        "num_modes = 5",  # Number of output poses
+        "energy_range = 4",  # Maximum energy difference between output poses
+    ]
+    
+    with open(output_config_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(config_lines) + "\n")
+    
+    print(f"   Center coordinates (x, y, z): {center_x:.3f}, {center_y:.3f}, {center_z:.3f}")
 
 
 if __name__ == "__main__":

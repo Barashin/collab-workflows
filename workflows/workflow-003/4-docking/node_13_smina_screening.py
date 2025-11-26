@@ -383,7 +383,7 @@ def check_smina():
             # Try --help as fallback
             result2 = subprocess.run(
                 [smina_path, "--help"], capture_output=True, text=True, timeout=10
-            )
+        )
             if result2.returncode == 0:
                 print(f"✓ smina command is available at: {smina_path}")
             else:

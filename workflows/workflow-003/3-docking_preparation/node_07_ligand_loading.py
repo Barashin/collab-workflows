@@ -113,19 +113,31 @@ def main():
     # Select ligand for docking config
     # Priority: 1) Environment variables (LIGAND_NAME, PARAM_LIGAND_NAME), 2) global_params.json, 3) DEFAULT values, 4) First ligand found
     selected_ligand_name = os.environ.get("LIGAND_NAME") or os.environ.get("PARAM_LIGAND_NAME") or global_ligand_name
-    selected_chain_id = os.environ.get("CHAIN_ID", DEFAULT_CHAIN_ID)
+    # If CHAIN_ID is not set, use DEFAULT_CHAIN_ID (None means all chains)
+    selected_chain_id = os.environ.get("CHAIN_ID") or DEFAULT_CHAIN_ID
     selected_ligand = None
     
-    # Try to find the specified ligand
+    print(f"\nSearching for ligand '{selected_ligand_name}' from global_params.json...")
+    
+    # Try to find the specified ligand (matching ligand name, chain is optional)
+    matching_ligands = []
     for chain_id, ligand_name, center, num_atoms in ligands:
         ligand_match = ligand_name.upper() == selected_ligand_name.upper()
         chain_match = (selected_chain_id is None) or (chain_id == selected_chain_id)
         
-        if ligand_match and chain_match:
-            selected_ligand = (chain_id, ligand_name, center, num_atoms)
-            break
+        if ligand_match:
+            matching_ligands.append((chain_id, ligand_name, center, num_atoms))
+            # If chain also matches, use this one
+            if chain_match:
+                selected_ligand = (chain_id, ligand_name, center, num_atoms)
+                break
     
-    # If specified ligand not found, use the first one
+    # If exact match (ligand + chain) not found, use first matching ligand name
+    if selected_ligand is None and matching_ligands:
+        selected_ligand = matching_ligands[0]
+        print(f"✓ Found ligand '{selected_ligand[1]}' (first match from {len(matching_ligands)} found)")
+    
+    # If specified ligand not found at all, use the first one
     if selected_ligand is None:
         print(f"\n⚠ Warning: Ligand '{selected_ligand_name}'", end="")
         if selected_chain_id:

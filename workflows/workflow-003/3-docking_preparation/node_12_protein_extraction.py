@@ -14,7 +14,7 @@ from Bio.PDB import PDBIO, PDBParser, Select
 
 DEFAULT_PDB_ID = "5Y7J"
 # Default chain ID (can be overridden by environment variable, None means all chains)
-DEFAULT_CHAIN_ID =  "A"
+DEFAULT_CHAIN_ID = None  # Default is all chains
 
 def load_global_params():
     """Load parameters from global_params.json"""
@@ -46,7 +46,8 @@ def main():
     # Load parameters from global_params.json or environment variables
     global_pdb_id = load_global_params()
     pdb_id = os.environ.get("PDB_ID") or os.environ.get("PARAM_PDB_ID") or global_pdb_id
-    selected_chain_id = os.environ.get("CHAIN_ID", DEFAULT_CHAIN_ID)
+    # If CHAIN_ID is not set, use DEFAULT_CHAIN_ID (None means all chains)
+    selected_chain_id = os.environ.get("CHAIN_ID") or DEFAULT_CHAIN_ID
     
     # Try to use chain-extracted PDB from node_08 first (in outputs/), fallback to original PDB (in input/)
     # node_08 outputs to outputs/ in the same node, so check outputs/ first

@@ -48,7 +48,7 @@ Downloads, unpacks, selects, and prepares ligand compounds for docking.
 - **`node_03_ligand_selection.py`**: Selects specific ligands from the library
 - **`node_04_real_ligand_addition.py`**: Adds the real ligand from PDB to the selected compounds
 - **`node_05_prepare_ligands.py`**: Prepares all ligands (library + real_ligand) - adds hydrogens, assigns charges, generates 3D structures, minimizes energy
-- **`node_06_ligand_view.py`**: Exports ligand information to CSV file
+- **`node_06_ligand_view.py`**: Generates visualization of ligands
 
 **Process:**
 1. Downloads a ligand library ZIP file from a specified URL
@@ -60,7 +60,7 @@ Downloads, unpacks, selects, and prepares ligand compounds for docking.
    - Assigns Gasteiger partial charges
    - Generates 3D structures using RDKit
    - Minimizes energy using MMFF94 force field
-6. Exports ligand information (SMILES, molecular weight, LogP, etc.) to CSV file
+6. Generates visualization files
 
 **Input:**
 - `*.pdb` from `1-protein_preparation`
@@ -281,7 +281,8 @@ workflow-003/
 │       ├── selected_compounds/
 │       │   ├── *.sdf
 │       │   └── real_ligand.sdf
-│       └── ligand.csv
+│       ├── ligand.csv
+│       └── variants.svg
 ├── 3-docking_preparation/
 │   └── outputs/
 │       ├── {pdb_id}_chain.pdb

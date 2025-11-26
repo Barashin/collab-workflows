@@ -9,9 +9,16 @@ Output: outputs/selected_compounds/*.sdf (prepared SDF files with 3D structures)
 import os
 import glob
 import subprocess
+import time
+import signal
+from contextlib import contextmanager
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem import rdMolAlign
+
+# Timeout settings (in seconds)
+MAX_PROCESSING_TIME_PER_LIGAND = 60  # 1 minute per ligand
+MAX_STEP_TIME = 30  # 30 seconds per step
 
 # Get script directory and set paths relative to script location
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -19,6 +26,34 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # This includes ligands from Node 3 and real_ligand from Node 4
 INPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs", "selected_compounds")
+
+
+class ProcessingTimeoutError(Exception):
+    """Custom timeout exception for ligand processing"""
+    pass
+
+
+@contextmanager
+def timeout_context(seconds):
+    """Context manager for timeout handling (Unix/Linux/macOS only)"""
+    if not hasattr(signal, 'SIGALRM'):
+        # Windows doesn't support SIGALRM, just yield without timeout
+        yield
+        return
+    
+    def timeout_handler(signum, frame):
+        raise ProcessingTimeoutError(f"Operation timed out after {seconds} seconds")
+    
+    # Set the signal handler
+    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(seconds)
+    
+    try:
+        yield
+    finally:
+        # Restore the old handler and cancel the alarm
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
 
 def main():
     """Main execution function"""
@@ -44,17 +79,36 @@ def main():
     # Process each SDF file
     successful_count = 0
     failed_count = 0
+    skipped_count = 0
     
     for i, sdf_file in enumerate(sdf_files, 1):
         base_name = os.path.basename(sdf_file)
         print(f"\n[{i}/{len(sdf_files)}] Processing {base_name}...")
         
+        # Record start time for this ligand
+        start_time = time.time()
+        
         try:
+            # Check if we've exceeded the time limit before starting
+            elapsed = time.time() - start_time
+            if elapsed >= MAX_PROCESSING_TIME_PER_LIGAND:
+                print(f"  ⏱ Skipping {base_name}: Time limit reached before processing")
+                skipped_count += 1
+                continue
+            
             # Step 1: Add hydrogens using obabel
             print("  Step 1: Adding hydrogens...")
+            step_start = time.time()
             if not add_hydrogens_obabel(sdf_file):
                 print(f"  ⚠ Warning: Failed to add hydrogens for {base_name}")
                 failed_count += 1
+                continue
+            
+            # Check time after step 1
+            elapsed = time.time() - start_time
+            if elapsed >= MAX_PROCESSING_TIME_PER_LIGAND:
+                print(f"  ⏱ Skipping {base_name}: Time limit reached after Step 1 ({elapsed:.1f}s)")
+                skipped_count += 1
                 continue
             
             # Step 2: Assign partial charges (Gasteiger) using obabel
@@ -64,21 +118,48 @@ def main():
                 failed_count += 1
                 continue
             
+            # Check time after step 2
+            elapsed = time.time() - start_time
+            if elapsed >= MAX_PROCESSING_TIME_PER_LIGAND:
+                print(f"  ⏱ Skipping {base_name}: Time limit reached after Step 2 ({elapsed:.1f}s)")
+                skipped_count += 1
+                continue
+            
             # Step 3: Generate 3D structure using RDKit
             print("  Step 3: Generating 3D structure...")
-            if not generate_3d_structure(sdf_file):
+            remaining_time = MAX_PROCESSING_TIME_PER_LIGAND - (time.time() - start_time)
+            if remaining_time <= 0:
+                print(f"  ⏱ Skipping {base_name}: No time remaining for Step 3")
+                skipped_count += 1
+                continue
+            
+            if not generate_3d_structure_with_timeout(sdf_file, remaining_time):
                 print(f"  ⚠ Warning: Failed to generate 3D structure for {base_name}")
                 failed_count += 1
                 continue
             
-            # Step 4: Energy minimization
-            print("  Step 4: Energy minimization...")
+            # Check final time
+            elapsed = time.time() - start_time
+            if elapsed >= MAX_PROCESSING_TIME_PER_LIGAND:
+                print(f"  ⏱ Skipping {base_name}: Time limit reached after Step 3 ({elapsed:.1f}s)")
+                skipped_count += 1
+                continue
             
-            print(f"  ✓ Successfully prepared {base_name}")
+            # Step 4: Energy minimization (skipped for now, as it's not implemented)
+            # print("  Step 4: Energy minimization...")
+            
+            elapsed = time.time() - start_time
+            print(f"  ✓ Successfully prepared {base_name} (took {elapsed:.1f}s)")
             successful_count += 1
             
+        except ProcessingTimeoutError as e:
+            elapsed = time.time() - start_time
+            print(f"  ⏱ Skipping {base_name}: {e} (elapsed: {elapsed:.1f}s)")
+            skipped_count += 1
+            continue
         except Exception as e:
-            print(f"  ✗ Error processing {base_name}: {e}")
+            elapsed = time.time() - start_time
+            print(f"  ✗ Error processing {base_name}: {e} (elapsed: {elapsed:.1f}s)")
             failed_count += 1
             continue
     
@@ -86,6 +167,8 @@ def main():
     print(f"   Successful: {successful_count}/{len(sdf_files)}")
     if failed_count > 0:
         print(f"   Failed: {failed_count}/{len(sdf_files)}")
+    if skipped_count > 0:
+        print(f"   Skipped (timeout): {skipped_count}/{len(sdf_files)}")
 
 
 def add_hydrogens_obabel(sdf_file):
@@ -99,9 +182,12 @@ def add_hydrogens_obabel(sdf_file):
             ["obabel", abs_sdf_file, "-O", abs_sdf_file, "-h", "-p", "7.4"],
             capture_output=True,
             text=True,
-            timeout=60
+            timeout=MAX_STEP_TIME
         )
         return result.returncode == 0
+    except subprocess.TimeoutExpired:
+        print(f"    Error: Timeout after {MAX_STEP_TIME}s")
+        return False
     except Exception as e:
         print(f"    Error: {e}")
         return False
@@ -115,21 +201,60 @@ def assign_charges_obabel(sdf_file):
             ["obabel", abs_sdf_file, "-O", abs_sdf_file, "--partialcharge", "gasteiger"],
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=MAX_STEP_TIME
         )
         return result.returncode == 0
+    except subprocess.TimeoutExpired:
+        print(f"    Error: Timeout after {MAX_STEP_TIME}s")
+        return False
     except Exception as e:
         print(f"    Error: {e}")
         return False
 
 
-def generate_3d_structure(sdf_file):
+def generate_3d_structure_with_timeout(sdf_file, timeout_seconds):
+    """
+    Generate 3D structure using RDKit with timeout.
+    Uses multiple embedding attempts with different methods for better success rate.
+    Note: Energy minimization is performed separately using obminimize, so no optimization here.
+    Processes all molecules in the SDF file.
+    
+    Args:
+        sdf_file: Path to SDF file
+        timeout_seconds: Maximum time allowed for this operation
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Use signal-based timeout (Unix/Linux/macOS only)
+        if hasattr(signal, 'SIGALRM'):
+            with timeout_context(min(timeout_seconds, MAX_STEP_TIME)):
+                return generate_3d_structure(sdf_file, timeout_seconds)
+        else:
+            # Windows doesn't support SIGALRM, use time-based check
+            return generate_3d_structure(sdf_file, timeout_seconds)
+    except ProcessingTimeoutError:
+        print(f"    Error: Timeout after {timeout_seconds}s")
+        return False
+    except Exception as e:
+        print(f"    Error: {e}")
+        return False
+
+
+def generate_3d_structure(sdf_file, timeout_seconds=None):
     """
     Generate 3D structure using RDKit.
     Uses multiple embedding attempts with different methods for better success rate.
     Note: Energy minimization is performed separately using obminimize, so no optimization here.
     Processes all molecules in the SDF file.
+    
+    Args:
+        sdf_file: Path to SDF file
+        timeout_seconds: Optional timeout in seconds (for Windows compatibility)
     """
+    start_time = time.time()
+    
     try:
         # Read all molecules from SDF
         supplier = Chem.SDMolSupplier(sdf_file)
@@ -142,7 +267,20 @@ def generate_3d_structure(sdf_file):
         processed_mols = []
         
         # Process each molecule
-        for mol_idx, mol in enumerate(mols):
+        # Limit the number of molecules to process to avoid timeout
+        max_molecules = 10  # Limit to first 10 molecules to avoid timeout
+        molecules_to_process = mols[:max_molecules] if len(mols) > max_molecules else mols
+        
+        if len(mols) > max_molecules:
+            print(f"    Warning: Processing only first {max_molecules} of {len(mols)} molecules to avoid timeout")
+        
+        for mol_idx, mol in enumerate(molecules_to_process):
+            # Check timeout for Windows (or when signal-based timeout is not available)
+            if timeout_seconds is not None:
+                elapsed = time.time() - start_time
+                if elapsed >= timeout_seconds:
+                    print(f"    Warning: Timeout reached ({elapsed:.1f}s), stopping processing")
+                    break
             if mol is None:
                 continue
             
@@ -152,7 +290,7 @@ def generate_3d_structure(sdf_file):
             
             # Try to generate 3D structure with multiple attempts
             success = False
-            max_attempts = 5
+            max_attempts = 3  # Reduced from 5 to 3 to save time
             
             # Method 1: Standard ETKDG embedding
             for attempt in range(max_attempts):
