@@ -47,7 +47,7 @@ Downloads, unpacks, selects, and prepares ligand compounds for docking.
 - **`node_02_unpack_ligands.py`**: Unpacks the ligand library
 - **`node_03_ligand_selection.py`**: Selects specific ligands from the library
 - **`node_04_real_ligand_addition.py`**: Downloads the real ligand SDF file from RCSB PDB database using `ligand_name` from `global_params.json` and adds it to the selected compounds
-- **`node_05_prepare_ligands.py`**: Prepares all ligands (library + real_ligand) - adds hydrogens, assigns charges, generates 3D structures, minimizes energy (with timeout handling: 60s per ligand, 30s per step)
+- **`node_05_prepare_ligands.py`**: Prepares all ligands (library + real_ligand) - adds hydrogens, assigns charges, generates 3D structures, minimizes energy using RDKit UFF (with timeout handling: 60s per ligand, 30s per step)
 - **`node_06_ligand_view.py`**: Generates visualization of ligands
 
 **Process:**
@@ -59,7 +59,7 @@ Downloads, unpacks, selects, and prepares ligand compounds for docking.
    - Adds hydrogens with pH 7.4 consideration (proper protonation state)
    - Assigns Gasteiger partial charges
    - Generates 3D structures using RDKit
-   - Minimizes energy using MMFF94 force field
+   - Minimizes energy using RDKit UFF force field
    - **Timeout handling**: Each ligand processing is limited to 60 seconds, with 30 seconds per step. Ligands exceeding the timeout are skipped to prevent workflow hanging.
 6. Generates visualization files
 
@@ -337,7 +337,7 @@ All dependencies are installed inside the Docker container (`chiral.sakuracr.jp/
 - **SMINA** - Enhanced AutoDock Vina for molecular docking
 - **BioPython** - Biological computation library for PDB parsing
 - **OpenMM / PDBFixer** - Protein structure cleaning and preparation
-- **Open Babel** - Ligand preparation (hydrogen addition with pH 7.4 consideration, charge assignment, energy minimization)
+- **Open Babel** - Ligand preparation (hydrogen addition with pH 7.4 consideration, charge assignment)
 - **NumPy** - Numerical computing
 
 ---
@@ -389,6 +389,7 @@ bash run.sh
 1. **File Mounting**: Silva mounts outputs from upstream nodes to the current node's working directory. Scripts check both the root directory and `outputs/` subdirectory to handle different mounting patterns.
 
 2. **Ligand Preparation**: The `node_05_prepare_ligands.py` script prepares all ligands (library + real_ligand) using Open Babel and RDKit. It adds hydrogens with pH 7.4 consideration for proper protonation state, assigns Gasteiger charges, generates 3D structures, and minimizes energy. **Timeout handling**: Each ligand processing is limited to 60 seconds (30 seconds per step) to prevent workflow hanging. Ligands exceeding the timeout are automatically skipped. Failed preparations are logged but don't stop the workflow.
+   Energy minimization is performed using RDKit UFF.
 
 3. **Real Ligand Download**: The `node_04_real_ligand_addition.py` script downloads the real ligand SDF file directly from RCSB PDB database using the `ligand_name` specified in `global_params.json`. This eliminates the dependency on `3-docking_preparation` for the real ligand file.
 
