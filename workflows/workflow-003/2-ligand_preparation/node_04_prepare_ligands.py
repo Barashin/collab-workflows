@@ -9,6 +9,7 @@ Output: selected_compounds/*.sdf (prepared SDF files with 3D structures)
 import os
 import glob
 import subprocess
+import shutil
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem import rdMolAlign
@@ -116,47 +117,117 @@ def main():
 
 def find_obabel():
     """Find obabel command in common locations"""
-    possible_paths = [
-        "obabel",  # In PATH
-        "/opt/conda/envs/in_silico/bin/obabel",  # Conda environment
-        "/usr/local/bin/obabel",
-        "/usr/bin/obabel",
-    ]
-    for path in possible_paths:
+    # First, try to find in PATH using shutil.which
+    obabel_path = shutil.which("obabel")
+    if obabel_path:
         try:
             result = subprocess.run(
-                [path, "-V"], 
+                [obabel_path, "-V"], 
                 capture_output=True, 
                 text=True, 
                 timeout=5
             )
             if result.returncode == 0:
-                return path
+                return obabel_path
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
+            pass
+    
+    # Try to find conda environment paths dynamically
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        conda_bin = os.path.join(conda_prefix, "bin", "obabel")
+        if os.path.exists(conda_bin):
+            try:
+                result = subprocess.run(
+                    [conda_bin, "-V"], 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    return conda_bin
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+    
+    # Check common conda installation paths
+    possible_paths = [
+        "/opt/conda/envs/in_silico/bin/obabel",
+        "/opt/conda/bin/obabel",
+        "/usr/local/conda/bin/obabel",
+        "/usr/local/bin/obabel",
+        "/usr/bin/obabel",
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            try:
+                result = subprocess.run(
+                    [path, "-V"], 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    return path
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
     return None
 
 
 def find_obminimize():
     """Find obminimize command in common locations"""
-    possible_paths = [
-        "obminimize",  # In PATH
-        "/opt/conda/envs/in_silico/bin/obminimize",  # Conda environment
-        "/usr/local/bin/obminimize",
-        "/usr/bin/obminimize",
-    ]
-    for path in possible_paths:
+    # First, try to find in PATH using shutil.which
+    obminimize_path = shutil.which("obminimize")
+    if obminimize_path:
         try:
             result = subprocess.run(
-                [path, "-h"], 
+                [obminimize_path, "-h"], 
                 capture_output=True, 
                 text=True, 
                 timeout=5
             )
             if result.returncode == 0:
-                return path
+                return obminimize_path
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
+            pass
+    
+    # Try to find conda environment paths dynamically
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        conda_bin = os.path.join(conda_prefix, "bin", "obminimize")
+        if os.path.exists(conda_bin):
+            try:
+                result = subprocess.run(
+                    [conda_bin, "-h"], 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    return conda_bin
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+    
+    # Check common conda installation paths
+    possible_paths = [
+        "/opt/conda/envs/in_silico/bin/obminimize",
+        "/opt/conda/bin/obminimize",
+        "/usr/local/conda/bin/obminimize",
+        "/usr/local/bin/obminimize",
+        "/usr/bin/obminimize",
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            try:
+                result = subprocess.run(
+                    [path, "-h"], 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    return path
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
     return None
 
 
