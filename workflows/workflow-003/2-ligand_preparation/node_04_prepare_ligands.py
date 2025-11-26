@@ -301,11 +301,11 @@ def add_hydrogens_obabel(sdf_file):
             timeout=60
         )
         
-        # If format 1 fails with "cannot write output format", try format 2
-        if result.returncode != 0 and "cannot write output format" in result.stderr.lower():
+        # If format 1 fails, try format 2 with explicit input format
+        if result.returncode != 0:
             print(f"    Trying alternative command format...")
-            # Format 2: obabel input.sdf -O output.sdf -h (let obabel detect format from extension)
-            cmd2 = [obabel_cmd, abs_sdf_file, "-O", temp_file, "-h"]
+            # Format 2: obabel -isdf input.sdf -osdf output.sdf -h (explicit input/output format)
+            cmd2 = [obabel_cmd, "-isdf", abs_sdf_file, "-osdf", temp_file, "-h"]
             print(f"    Running: {' '.join(cmd2)}")
             result = subprocess.run(
                 cmd2,
@@ -313,19 +313,6 @@ def add_hydrogens_obabel(sdf_file):
                 text=True,
                 timeout=60
             )
-            if result.returncode == 0:
-                result = result  # Use the successful result
-            else:
-                # Format 3: obabel -isdf input.sdf -osdf output.sdf -h
-                print(f"    Trying format 3...")
-                cmd3 = [obabel_cmd, "-isdf", abs_sdf_file, "-osdf", temp_file, "-h"]
-                print(f"    Running: {' '.join(cmd3)}")
-                result = subprocess.run(
-                    cmd3,
-                    capture_output=True,
-                    text=True,
-                    timeout=60
-                )
         
         # Check if output file was created successfully
         if result.returncode == 0:
@@ -409,11 +396,11 @@ def assign_charges_obabel(sdf_file):
             timeout=120
         )
         
-        # If format 1 fails with "cannot write output format", try format 2
-        if result.returncode != 0 and "cannot write output format" in result.stderr.lower():
+        # If format 1 fails, try format 2 with explicit input format
+        if result.returncode != 0:
             print(f"    Trying alternative command format...")
-            # Format 2: obabel input.sdf -O output.sdf --partialcharge gasteiger
-            cmd2 = [obabel_cmd, abs_sdf_file, "-O", temp_file, "--partialcharge", "gasteiger"]
+            # Format 2: obabel -isdf input.sdf -osdf output.sdf --partialcharge gasteiger (explicit input/output format)
+            cmd2 = [obabel_cmd, "-isdf", abs_sdf_file, "-osdf", temp_file, "--partialcharge", "gasteiger"]
             print(f"    Running: {' '.join(cmd2)}")
             result = subprocess.run(
                 cmd2,
@@ -421,17 +408,6 @@ def assign_charges_obabel(sdf_file):
                 text=True,
                 timeout=120
             )
-            if result.returncode != 0:
-                # Format 3: obabel -isdf input.sdf -osdf output.sdf --partialcharge gasteiger
-                print(f"    Trying format 3...")
-                cmd3 = [obabel_cmd, "-isdf", abs_sdf_file, "-osdf", temp_file, "--partialcharge", "gasteiger"]
-                print(f"    Running: {' '.join(cmd3)}")
-                result = subprocess.run(
-                    cmd3,
-                    capture_output=True,
-                    text=True,
-                    timeout=120
-                )
         
         # Check if output file was created successfully
         if result.returncode == 0:
