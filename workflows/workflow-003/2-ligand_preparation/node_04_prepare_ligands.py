@@ -287,10 +287,12 @@ def add_hydrogens_obabel(sdf_file):
         # Create temporary file for output (obabel cannot directly overwrite input file)
         temp_file = abs_sdf_file + ".tmp"
         
-        # obabel command: obabel $i -h -osdf -O $temp
-        # Options must come after input file, and output format must be specified
-        # Use temporary file to avoid "cannot write output format" error
+        # Try different command formats - some versions of obabel have different syntax
+        # Format 1: obabel input.sdf -h -osdf -O output.sdf
         cmd = [obabel_cmd, abs_sdf_file, "-h", "-osdf", "-O", temp_file]
+        
+        # Debug: print command being executed
+        print(f"    Running: {' '.join(cmd)}")
         
         result = subprocess.run(
             cmd,
@@ -298,6 +300,32 @@ def add_hydrogens_obabel(sdf_file):
             text=True,
             timeout=60
         )
+        
+        # If format 1 fails with "cannot write output format", try format 2
+        if result.returncode != 0 and "cannot write output format" in result.stderr.lower():
+            print(f"    Trying alternative command format...")
+            # Format 2: obabel input.sdf -O output.sdf -h (let obabel detect format from extension)
+            cmd2 = [obabel_cmd, abs_sdf_file, "-O", temp_file, "-h"]
+            print(f"    Running: {' '.join(cmd2)}")
+            result = subprocess.run(
+                cmd2,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            if result.returncode == 0:
+                result = result  # Use the successful result
+            else:
+                # Format 3: obabel -isdf input.sdf -osdf output.sdf -h
+                print(f"    Trying format 3...")
+                cmd3 = [obabel_cmd, "-isdf", abs_sdf_file, "-osdf", temp_file, "-h"]
+                print(f"    Running: {' '.join(cmd3)}")
+                result = subprocess.run(
+                    cmd3,
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
         
         # Check if output file was created successfully
         if result.returncode == 0:
@@ -322,14 +350,16 @@ def add_hydrogens_obabel(sdf_file):
             if os.path.exists(temp_file):
                 os.remove(temp_file)
             # Print error details for debugging
+            print(f"    Return code: {result.returncode}")
             if result.stderr:
+                print(f"    Full stderr: {result.stderr}")
                 stderr_lower = result.stderr.lower()
                 if "error" in stderr_lower or "cannot" in stderr_lower or "failed" in stderr_lower:
-                    print(f"    obabel error: {result.stderr[:300]}")
+                    print(f"    obabel error: {result.stderr[:500]}")
                 else:
-                    print(f"    obabel stderr: {result.stderr[:300]}")
+                    print(f"    obabel stderr: {result.stderr[:500]}")
             if result.stdout:
-                print(f"    obabel stdout: {result.stdout[:300]}")
+                print(f"    obabel stdout: {result.stdout[:500]}")
             return False
     except subprocess.TimeoutExpired:
         print(f"    Timeout while adding hydrogens")
@@ -365,10 +395,12 @@ def assign_charges_obabel(sdf_file):
         # Create temporary file for output (obabel cannot directly overwrite input file)
         temp_file = abs_sdf_file + ".tmp"
         
-        # obabel command: obabel "$i" --partialcharge gasteiger -osdf -O "$temp"
-        # Options must come after input file, and output format must be specified
-        # Use temporary file to avoid "cannot write output format" error
+        # Try different command formats
+        # Format 1: obabel input.sdf --partialcharge gasteiger -osdf -O output.sdf
         cmd = [obabel_cmd, abs_sdf_file, "--partialcharge", "gasteiger", "-osdf", "-O", temp_file]
+        
+        # Debug: print command being executed
+        print(f"    Running: {' '.join(cmd)}")
         
         result = subprocess.run(
             cmd,
@@ -376,6 +408,30 @@ def assign_charges_obabel(sdf_file):
             text=True,
             timeout=120
         )
+        
+        # If format 1 fails with "cannot write output format", try format 2
+        if result.returncode != 0 and "cannot write output format" in result.stderr.lower():
+            print(f"    Trying alternative command format...")
+            # Format 2: obabel input.sdf -O output.sdf --partialcharge gasteiger
+            cmd2 = [obabel_cmd, abs_sdf_file, "-O", temp_file, "--partialcharge", "gasteiger"]
+            print(f"    Running: {' '.join(cmd2)}")
+            result = subprocess.run(
+                cmd2,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            if result.returncode != 0:
+                # Format 3: obabel -isdf input.sdf -osdf output.sdf --partialcharge gasteiger
+                print(f"    Trying format 3...")
+                cmd3 = [obabel_cmd, "-isdf", abs_sdf_file, "-osdf", temp_file, "--partialcharge", "gasteiger"]
+                print(f"    Running: {' '.join(cmd3)}")
+                result = subprocess.run(
+                    cmd3,
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
         
         # Check if output file was created successfully
         if result.returncode == 0:
@@ -400,14 +456,16 @@ def assign_charges_obabel(sdf_file):
             if os.path.exists(temp_file):
                 os.remove(temp_file)
             # Print error details for debugging
+            print(f"    Return code: {result.returncode}")
             if result.stderr:
+                print(f"    Full stderr: {result.stderr}")
                 stderr_lower = result.stderr.lower()
                 if "error" in stderr_lower or "cannot" in stderr_lower or "failed" in stderr_lower:
-                    print(f"    obabel error: {result.stderr[:300]}")
+                    print(f"    obabel error: {result.stderr[:500]}")
                 else:
-                    print(f"    obabel stderr: {result.stderr[:300]}")
+                    print(f"    obabel stderr: {result.stderr[:500]}")
             if result.stdout:
-                print(f"    obabel stdout: {result.stdout[:300]}")
+                print(f"    obabel stdout: {result.stdout[:500]}")
             return False
     except subprocess.TimeoutExpired:
         print(f"    Timeout while assigning charges")
