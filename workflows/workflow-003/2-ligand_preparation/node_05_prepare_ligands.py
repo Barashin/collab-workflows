@@ -145,8 +145,17 @@ def main():
                 skipped_count += 1
                 continue
             
-            # Step 4: Energy minimization (skipped for now, as it's not implemented)
-            # print("  Step 4: Energy minimization...")
+            # Step 4: Energy minimization
+            print("  Step 4: Energy minimization...")
+            remaining_time = MAX_PROCESSING_TIME_PER_LIGAND - (time.time() - start_time)
+            if remaining_time <= 0:
+                print(f"  ⏱ Skipping {base_name}: No time remaining for Step 4")
+                skipped_count += 1
+                continue
+            
+            if not minimize_energy_rdkit(sdf_file, remaining_time):
+                print(f"  ⚠ Warning: Failed to minimize energy for {base_name} (continuing anyway)")
+                # Continue processing even if minimization fails
             
             elapsed = time.time() - start_time
             print(f"  ✓ Successfully prepared {base_name} (took {elapsed:.1f}s)")
@@ -216,7 +225,7 @@ def generate_3d_structure_with_timeout(sdf_file, timeout_seconds):
     """
     Generate 3D structure using RDKit with timeout.
     Uses multiple embedding attempts with different methods for better success rate.
-    Note: Energy minimization is performed separately using obminimize, so no optimization here.
+    Note: Energy minimization is performed separately using RDKit UFF, so no optimization here.
     Processes all molecules in the SDF file.
     
     Args:
@@ -246,7 +255,7 @@ def generate_3d_structure(sdf_file, timeout_seconds=None):
     """
     Generate 3D structure using RDKit.
     Uses multiple embedding attempts with different methods for better success rate.
-    Note: Energy minimization is performed separately using obminimize, so no optimization here.
+    Note: Energy minimization is performed separately using RDKit UFF, so no optimization here.
     Processes all molecules in the SDF file.
     
     Args:
@@ -301,7 +310,7 @@ def generate_3d_structure(sdf_file, timeout_seconds=None):
                     conf_id = AllChem.EmbedMolecule(mol, params)
                     
                     if conf_id >= 0:
-                        # No optimization here - will be done by obminimize later
+                        # No optimization here - will be done by RDKit UFF later
                         success = True
                         break
                 except Exception as e:
@@ -316,7 +325,7 @@ def generate_3d_structure(sdf_file, timeout_seconds=None):
                 try:
                     conf_id = AllChem.EmbedMolecule(mol, useRandomCoords=True)
                     if conf_id >= 0:
-                        # No optimization here - will be done by obminimize later
+                        # No optimization here - will be done by RDKit UFF later
                         success = True
                 except Exception as e:
                     if mol_idx == 0:  # Only print warning for first molecule
@@ -330,7 +339,7 @@ def generate_3d_structure(sdf_file, timeout_seconds=None):
                     # Then try to embed 3D
                     conf_id = AllChem.EmbedMolecule(mol, useRandomCoords=True)
                     if conf_id >= 0:
-                        # No optimization here - will be done by obminimize later
+                        # No optimization here - will be done by RDKit UFF later
                         success = True
                 except Exception as e:
                     if mol_idx == 0:  # Only print warning for first molecule
@@ -361,20 +370,74 @@ def generate_3d_structure(sdf_file, timeout_seconds=None):
         return False
 
 
-def minimize_energy(sdf_file):
-    """Minimize energy using obminimize"""
+def minimize_energy_rdkit(sdf_file, timeout_seconds=None):
+    """
+    Minimize energy using RDKit UFF (Universal Force Field).
+    Simple energy minimization for all molecules in the SDF file.
+    
+    Args:
+        sdf_file: Path to SDF file
+        timeout_seconds: Optional timeout in seconds
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    start_time = time.time()
+    
     try:
-        abs_sdf_file = os.path.abspath(sdf_file)
-        with open(abs_sdf_file, "w") as outfile:
-            result = subprocess.run(
-                ["obminimize", "-ff", "MMFF94", "-n", "1000", abs_sdf_file],
-                stdout=outfile,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=300
-            )
-        return result.returncode == 0
-    except Exception:
+        # Read all molecules from SDF
+        supplier = Chem.SDMolSupplier(sdf_file)
+        mols = [m for m in supplier if m is not None]
+        
+        if not mols:
+            print(f"    Error: Could not read any molecules from {sdf_file}")
+            return False
+        
+        processed_mols = []
+        
+        # Process each molecule
+        for mol_idx, mol in enumerate(mols):
+            # Check timeout
+            if timeout_seconds is not None:
+                elapsed = time.time() - start_time
+                if elapsed >= timeout_seconds:
+                    print(f"    Warning: Timeout reached ({elapsed:.1f}s), stopping minimization")
+                    break
+            
+            if mol is None:
+                continue
+            
+            try:
+                # Add hydrogens
+                mol = Chem.AddHs(mol)
+                
+                # Generate 3D structure
+                AllChem.EmbedMolecule(mol, useRandomCoords=True)
+                
+                # Perform UFF energy minimization
+                AllChem.UFFOptimizeMolecule(mol, maxIters=500)
+                
+                processed_mols.append(mol)
+                    
+            except Exception as e:
+                if mol_idx == 0:  # Only print warning for first molecule
+                    print(f"    Warning: Error processing molecule {mol_idx + 1}: {e}")
+                processed_mols.append(mol)
+        
+        if not processed_mols:
+            print(f"    Error: Could not process any molecules")
+            return False
+        
+        # Write all processed molecules back to SDF file
+        writer = Chem.SDWriter(sdf_file)
+        for mol in processed_mols:
+            writer.write(mol)
+        writer.close()
+        
+        return True
+        
+    except Exception as e:
+        print(f"    Error minimizing energy: {e}")
         return False
 
 
