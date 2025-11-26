@@ -55,9 +55,31 @@ def main():
         print(f"✓ Found obabel at: {obabel_cmd}")
     
     # Check if obminimize is available
-    obminimize_cmd = find_obminimize()
+    # Try to find obminimize in the same directory as obabel first
+    obminimize_cmd = None
+    if obabel_cmd:
+        obabel_dir = os.path.dirname(obabel_cmd)
+        obminimize_in_same_dir = os.path.join(obabel_dir, "obminimize")
+        if os.path.exists(obminimize_in_same_dir):
+            try:
+                result = subprocess.run(
+                    [obminimize_in_same_dir, "-h"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    obminimize_cmd = obminimize_in_same_dir
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+    
+    # If not found in same directory, try general search
+    if not obminimize_cmd:
+        obminimize_cmd = find_obminimize()
+    
     if not obminimize_cmd:
         print("⚠ Warning: obminimize is not available. Energy minimization will be skipped.")
+        print(f"   Searched in: {obabel_dir if obabel_cmd else 'N/A'}")
         print("   Please install Open Babel tools for energy minimization.")
         use_obminimize = False
     else:
@@ -262,13 +284,13 @@ def add_hydrogens_obabel(sdf_file):
             print(f"    Error: Input file is empty: {abs_sdf_file}")
             return False
         
-        # Store original file size for verification
-        original_size = os.path.getsize(abs_sdf_file)
+        # Create temporary file for output (obabel cannot directly overwrite input file)
+        temp_file = abs_sdf_file + ".tmp"
         
-        # obabel command: obabel $i -h -osdf -O $i
+        # obabel command: obabel $i -h -osdf -O $temp
         # Options must come after input file, and output format must be specified
-        # Directly overwrite the same file
-        cmd = [obabel_cmd, abs_sdf_file, "-h", "-osdf", "-O", abs_sdf_file]
+        # Use temporary file to avoid "cannot write output format" error
+        cmd = [obabel_cmd, abs_sdf_file, "-h", "-osdf", "-O", temp_file]
         
         result = subprocess.run(
             cmd,
@@ -277,32 +299,35 @@ def add_hydrogens_obabel(sdf_file):
             timeout=60
         )
         
-        # obabel outputs "N molecules converted" to stderr even on success
-        # Check stderr for errors
-        if result.stderr:
-            stderr_lower = result.stderr.lower()
-            if "error" in stderr_lower or "cannot" in stderr_lower or "failed" in stderr_lower:
-                print(f"    obabel error: {result.stderr[:300]}")
-                return False
-        
-        # Check if the file was successfully modified
+        # Check if output file was created successfully
         if result.returncode == 0:
-            if os.path.exists(abs_sdf_file) and os.path.getsize(abs_sdf_file) > 0:
+            if os.path.exists(temp_file) and os.path.getsize(temp_file) > 0:
+                # Replace original file with temporary file
+                os.replace(temp_file, abs_sdf_file)
                 if result.stderr:
                     # Print success message from stderr (e.g., "1 molecule converted")
                     print(f"    {result.stderr.strip()}")
                 return True
             else:
                 print(f"    Error: Output file was not created or is empty")
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
                 if result.stderr:
                     print(f"    obabel stderr: {result.stderr[:300]}")
                 if result.stdout:
                     print(f"    obabel stdout: {result.stdout[:300]}")
                 return False
         else:
+            # Clean up temp file if it exists
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
             # Print error details for debugging
             if result.stderr:
-                print(f"    obabel stderr: {result.stderr[:300]}")
+                stderr_lower = result.stderr.lower()
+                if "error" in stderr_lower or "cannot" in stderr_lower or "failed" in stderr_lower:
+                    print(f"    obabel error: {result.stderr[:300]}")
+                else:
+                    print(f"    obabel stderr: {result.stderr[:300]}")
             if result.stdout:
                 print(f"    obabel stdout: {result.stdout[:300]}")
             return False
@@ -337,10 +362,13 @@ def assign_charges_obabel(sdf_file):
             print(f"    Error: Input file is empty: {abs_sdf_file}")
             return False
         
-        # obabel command: obabel "$i" --partialcharge gasteiger -osdf -O "$i"
+        # Create temporary file for output (obabel cannot directly overwrite input file)
+        temp_file = abs_sdf_file + ".tmp"
+        
+        # obabel command: obabel "$i" --partialcharge gasteiger -osdf -O "$temp"
         # Options must come after input file, and output format must be specified
-        # Directly overwrite the same file
-        cmd = [obabel_cmd, abs_sdf_file, "--partialcharge", "gasteiger", "-osdf", "-O", abs_sdf_file]
+        # Use temporary file to avoid "cannot write output format" error
+        cmd = [obabel_cmd, abs_sdf_file, "--partialcharge", "gasteiger", "-osdf", "-O", temp_file]
         
         result = subprocess.run(
             cmd,
@@ -349,29 +377,35 @@ def assign_charges_obabel(sdf_file):
             timeout=120
         )
         
-        # obabel outputs "N molecules converted" to stderr even on success
-        # Check stderr for errors
-        if result.stderr:
-            stderr_lower = result.stderr.lower()
-            if "error" in stderr_lower or "cannot" in stderr_lower or "failed" in stderr_lower:
-                print(f"    obabel error: {result.stderr[:300]}")
-                return False
-        
-        # Check if the file was successfully modified
+        # Check if output file was created successfully
         if result.returncode == 0:
-            if os.path.exists(abs_sdf_file) and os.path.getsize(abs_sdf_file) > 0:
+            if os.path.exists(temp_file) and os.path.getsize(temp_file) > 0:
+                # Replace original file with temporary file
+                os.replace(temp_file, abs_sdf_file)
                 if result.stderr:
                     # Print success message from stderr (e.g., "1 molecule converted")
                     print(f"    {result.stderr.strip()}")
                 return True
             else:
                 print(f"    Error: Output file was not created or is empty")
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
                 if result.stderr:
                     print(f"    obabel stderr: {result.stderr[:300]}")
+                if result.stdout:
+                    print(f"    obabel stdout: {result.stdout[:300]}")
                 return False
         else:
+            # Clean up temp file if it exists
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+            # Print error details for debugging
             if result.stderr:
-                print(f"    obabel stderr: {result.stderr[:300]}")
+                stderr_lower = result.stderr.lower()
+                if "error" in stderr_lower or "cannot" in stderr_lower or "failed" in stderr_lower:
+                    print(f"    obabel error: {result.stderr[:300]}")
+                else:
+                    print(f"    obabel stderr: {result.stderr[:300]}")
             if result.stdout:
                 print(f"    obabel stdout: {result.stdout[:300]}")
             return False
