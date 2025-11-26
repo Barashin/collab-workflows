@@ -46,25 +46,26 @@ Downloads, unpacks, selects, and prepares ligand compounds for docking.
 - **`node_01_download_ligands.py`**: Downloads ligand library ZIP file
 - **`node_02_unpack_ligands.py`**: Unpacks the ligand library
 - **`node_03_ligand_selection.py`**: Selects specific ligands from the library
-- **`node_04_real_ligand_addition.py`**: Adds the real ligand from PDB to the selected compounds
-- **`node_05_prepare_ligands.py`**: Prepares all ligands (library + real_ligand) - adds hydrogens, assigns charges, generates 3D structures, minimizes energy
+- **`node_04_real_ligand_addition.py`**: Downloads the real ligand SDF file from RCSB PDB database using `ligand_name` from `global_params.json` and adds it to the selected compounds
+- **`node_05_prepare_ligands.py`**: Prepares all ligands (library + real_ligand) - adds hydrogens, assigns charges, generates 3D structures, minimizes energy (with timeout handling: 60s per ligand, 30s per step)
 - **`node_06_ligand_view.py`**: Generates visualization of ligands
 
 **Process:**
 1. Downloads a ligand library ZIP file from a specified URL
 2. Unpacks the library to extract SDF files
 3. Selects specific compounds based on criteria
-4. Adds the real ligand extracted from the PDB structure to the selected compounds
+4. Downloads the real ligand SDF file from RCSB PDB database using `ligand_name` from `global_params.json` and adds it to the selected compounds
 5. Prepares all ligands (library + real_ligand) using Open Babel and RDKit:
    - Adds hydrogens with pH 7.4 consideration (proper protonation state)
    - Assigns Gasteiger partial charges
    - Generates 3D structures using RDKit
    - Minimizes energy using MMFF94 force field
+   - **Timeout handling**: Each ligand processing is limited to 60 seconds, with 30 seconds per step. Ligands exceeding the timeout are skipped to prevent workflow hanging.
 6. Generates visualization files
 
 **Input:**
 - `*.pdb` from `1-protein_preparation`
-- `real_ligand.sdf` from `3-docking_preparation`
+- `ligand_name` from `global_params.json` (for downloading real ligand from PDB)
 
 **Output:**
 ```
@@ -79,7 +80,7 @@ outputs/
 └── variants.svg
 ```
 
-**Dependencies:** `1-protein_preparation`, `3-docking_preparation`
+**Dependencies:** `1-protein_preparation`
 
 ---
 
@@ -88,17 +89,17 @@ outputs/
 Prepares the docking configuration and cleans the protein structure.
 
 **Scripts:**
-- **`node_07_ligand_loading.py`**: Extracts ligand information from PDB file and generates `ligand_list.txt`
-- **`node_08_extract_chains.py`**: Extracts specific protein chains and the real ligand from PDB
-- **`node_11_ligand_center_identification.py`**: Generates `config.txt` for SMINA docking based on ligand center coordinates
-- **`node_12_protein_extraction.py`**: Cleans up the protein structure using PDBFixer
+- **`node_07_ligand_loading.py`**: Extracts ligand information from PDB file and generates `ligand_list.txt`. Uses `ligand_name` from `global_params.json` to select the ligand (if multiple found, uses the first one)
+- **`node_08_extract_chains.py`**: Extracts protein chains (default: all chains) and the real ligand from PDB
+- **`node_11_ligand_center_identification.py`**: Generates `config.txt` for SMINA docking based on ligand center coordinates. Uses `ligand_name` from `global_params.json` to select the ligand (if multiple found, uses the first one)
+- **`node_12_protein_extraction.py`**: Cleans up the protein structure using PDBFixer (default: all chains)
 
 **Process:**
 1. Loads ligand information from the PDB file
-2. Extracts specified protein chains (default: chain A) and the real ligand
-3. Calculates the binding site center using the real ligand's coordinates
+2. Extracts protein chains (default: all chains) and the real ligand. The ligand is selected based on `ligand_name` from `global_params.json` (if multiple ligands with the same name are found, the first one is used)
+3. Calculates the binding site center using the selected real ligand's coordinates from `global_params.json`
 4. Generates docking configuration file (`config.txt`) with center coordinates and grid size
-5. Cleans the protein structure using PDBFixer (adds missing residues, adds hydrogens, fixes structural issues)
+5. Cleans the protein structure using PDBFixer (adds missing residues, adds hydrogens, fixes structural issues). By default, all chains are included in the cleaned structure
 
 **Input:**
 - `*.pdb` from `1-protein_preparation`
@@ -106,8 +107,8 @@ Prepares the docking configuration and cleans the protein structure.
 **Output:**
 ```
 outputs/
-├── {pdb_id}_chain.pdb
-├── {pdb_id}_chain_{chain_id}_clean.pdb
+├── {pdb_id}_chain.pdb (or {pdb_id}_clean.pdb if all chains)
+├── {pdb_id}_chain_{chain_id}_clean.pdb (if specific chain selected)
 ├── real_ligand.sdf
 ├── ligand_list.txt
 └── config.txt
@@ -117,14 +118,14 @@ outputs/
 
 **Configuration File (`config.txt`):**
 ```
-center_x = <x_coordinate>
-center_y = <y_coordinate>
-center_z = <z_coordinate>
-size_x = 20.0
-size_y = 20.0
-size_z = 20.0
+center_x = <x_coordinate>  # Calculated from ligand_name in global_params.json
+center_y = <y_coordinate>  # Calculated from ligand_name in global_params.json
+center_z = <z_coordinate>  # Calculated from ligand_name in global_params.json
+size_x = 15.0
+size_y = 15.0
+size_z = 15.0
 exhaustiveness = 8
-num_modes = 1
+num_modes = 5
 energy_range = 4.0
 ```
 
@@ -209,7 +210,7 @@ The workflow is executed using **Silva**, which automatically manages dependenci
     ↓
 3-docking_preparation (Node 7-8, 11-12) ← 1-protein_preparation
     ↓                                    ↓
-2-ligand_preparation (Node 1-6) ← 1-protein_preparation, 3-docking_preparation
+2-ligand_preparation (Node 1-6) ← 1-protein_preparation
     ↓
 4-docking (Node 13) ← 2-ligand_preparation, 3-docking_preparation
     ↓
@@ -219,7 +220,7 @@ The workflow is executed using **Silva**, which automatically manages dependenci
 **Execution Order:**
 1. **1-protein_preparation** runs first (no dependencies)
 2. **3-docking_preparation** runs after 1-protein_preparation completes
-3. **2-ligand_preparation** runs after both 1-protein_preparation and 3-docking_preparation complete
+3. **2-ligand_preparation** runs after 1-protein_preparation completes (real ligand is downloaded from PDB, no longer depends on 3-docking_preparation)
 4. **4-docking** runs after both 2-ligand_preparation and 3-docking_preparation complete
 5. **5-report** runs last, after 3-docking_preparation and 4-docking complete
 
@@ -246,8 +247,8 @@ Located at `workflows/workflow-003/global_params.json`:
 
 Parameters can also be set via environment variables (takes precedence over `global_params.json`):
 - `PARAM_PDB_ID` or `PDB_ID`: PDB ID
-- `PARAM_LIGAND_NAME` or `LIGAND_NAME`: Ligand name
-- `CHAIN_ID`: Chain ID(s) to extract (default: "A")
+- `PARAM_LIGAND_NAME` or `LIGAND_NAME`: Ligand name (used for downloading real ligand and selecting ligand for config generation)
+- `CHAIN_ID`: Chain ID(s) to extract, comma-separated for multiple chains (e.g., "A" or "A,B"). Default: all chains (if not specified)
 
 ---
 
@@ -387,13 +388,19 @@ bash run.sh
 
 1. **File Mounting**: Silva mounts outputs from upstream nodes to the current node's working directory. Scripts check both the root directory and `outputs/` subdirectory to handle different mounting patterns.
 
-2. **Ligand Preparation**: The `node_05_prepare_ligands.py` script prepares all ligands (library + real_ligand) using Open Babel and RDKit. It adds hydrogens with pH 7.4 consideration for proper protonation state, assigns Gasteiger charges, generates 3D structures, and minimizes energy. Failed preparations are logged but don't stop the workflow.
+2. **Ligand Preparation**: The `node_05_prepare_ligands.py` script prepares all ligands (library + real_ligand) using Open Babel and RDKit. It adds hydrogens with pH 7.4 consideration for proper protonation state, assigns Gasteiger charges, generates 3D structures, and minimizes energy. **Timeout handling**: Each ligand processing is limited to 60 seconds (30 seconds per step) to prevent workflow hanging. Ligands exceeding the timeout are automatically skipped. Failed preparations are logged but don't stop the workflow.
 
-3. **Protein Cleaning**: PDBFixer may remove cofactors (like NAD) during cleaning. The workflow handles this by preserving important cofactors when possible.
+3. **Real Ligand Download**: The `node_04_real_ligand_addition.py` script downloads the real ligand SDF file directly from RCSB PDB database using the `ligand_name` specified in `global_params.json`. This eliminates the dependency on `3-docking_preparation` for the real ligand file.
 
-4. **Docking Configuration**: The `config.txt` file is generated automatically based on the real ligand's coordinates. You can manually edit it to adjust the docking search space.
+4. **Ligand Selection**: When multiple ligands with the same name are found in the PDB file, the workflow automatically selects the first one. The ligand selection is based on `ligand_name` from `global_params.json`, which is used both for downloading the real ligand and for generating the docking configuration.
 
-5. **SMINA Path**: In Docker containers, SMINA is located at `/usr/local/bin/smina`. For local testing on macOS, a local `smina.osx.12` binary is used if available.
+5. **Chain Selection**: By default, all protein chains are included in the docking preparation. To use specific chains, set the `CHAIN_ID` environment variable (e.g., `export CHAIN_ID=A` or `export CHAIN_ID=A,B`).
+
+6. **Protein Cleaning**: PDBFixer may remove cofactors (like NAD) during cleaning. The workflow handles this by preserving important cofactors when possible.
+
+7. **Docking Configuration**: The `config.txt` file is generated automatically based on the real ligand's coordinates from `global_params.json`. The ligand is selected based on `ligand_name`, and if multiple ligands with the same name are found, the first one is used. You can manually edit `config.txt` to adjust the docking search space.
+
+8. **SMINA Path**: In Docker containers, SMINA is located at `/usr/local/bin/smina`. For local testing on macOS, a local `smina.osx.12` binary is used if available.
 
 ---
 
