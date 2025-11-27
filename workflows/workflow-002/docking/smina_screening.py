@@ -48,7 +48,7 @@ if not os.path.exists(CONFIG_FILE):
     DOCKING_SETUP_DIR = os.path.join(SCRIPT_DIR, "..", "docking_setup", "outputs")
     CONFIG_FILE = os.path.join(DOCKING_SETUP_DIR, "config.txt")
 # 3. Selected compounds from input/selected_compounds/ (copied from library_construction/outputs/selected_compounds/ by run.sh)
-    SELECTED_COMPOUNDS_DIR = os.path.join(INPUT_DIR, "selected_compounds")
+SELECTED_COMPOUNDS_DIR = os.path.join(INPUT_DIR, "selected_compounds")
 # No fallback - must be in input/selected_compounds/ (copied by run.sh from library_construction/outputs/selected_compounds/)
 # Optional: real_ligand.sdf from input/ (copied from docking_setup/outputs/ by run.sh)
 REAL_LIGAND_INPUT = os.path.join(INPUT_DIR, "real_ligand.sdf")
@@ -113,7 +113,7 @@ def main():
                     basename = os.path.basename(pdb_file)
                     if pdb_id in basename and ("clean" in basename or "fixed" in basename):
                         receptor_file = pdb_file
-                break
+                        break
     
     if not receptor_file or not os.path.exists(receptor_file):
         print(f"❌ Error: Receptor file not found.")
